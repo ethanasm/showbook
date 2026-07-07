@@ -91,11 +91,15 @@ jobs:
       # The self-hosted runner has a stable HOME between jobs, so
       # the AVD persists naturally on disk without actions/cache.
       ANDROID_AVD_HOME: ${{ vars.ANDROID_AVD_HOME || '/home/ethan/.android-avd' }}
-      # Gradle in CI: no daemon (single-job runner), single worker
-      # process, and a 2 GB heap cap. The previous 4 GB cap + parallel
-      # emulator (2 GB AVD) + Metro overran the WSL runner's memory
-      # budget and Gradle got OOM-killed ~16 min into the build.
-      GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=1 -Dorg.gradle.parallel=false -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"'
+      # Gradle in CI: no daemon (single-job runner), two workers, and a
+      # 2 GB heap cap. workers.max was 1 while the WSL VM ran on its
+      # 7.8 GiB default and repeated systemd oom-kills took out the
+      # runner service mid-build (Jul 2026); after the .wslconfig
+      # memory/swap bump it's 2 — revisit upward only after the
+      # cross-repo build serialization exists (planned-improvements),
+      # since the sibling vacation-price-tracker runner's jobs share
+      # the same memory budget.
+      GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.parallel=false -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"'
       # The box hosts a SECOND repo's self-hosted runner
       # (vacation-price-tracker), whose e2e job runs its own emulator
       # against the same default adb server. Pin every adb call (adb
@@ -361,13 +365,71 @@ jobs:
           # Mask the token so it never appears in build logs, then hand both
           # values to later steps via the job environment.
           echo "::add-mask::$TOKEN"
+          # Fingerprint (not the value) of the stack's AUTH_SECRET — part
+          # of the APK cache key below, so a rotated secret can never
+          # serve a cached APK whose baked token no longer decodes.
+          SECRET_FP=$(docker exec showbook-e2e-web sh -c 'printf %s "$AUTH_SECRET" | sha256sum' | cut -c1-16)
           {
             echo "E2E_TEST_TOKEN<<__E2E_EOF__"
             echo "$TOKEN"
             echo "__E2E_EOF__"
             echo "E2E_TEST_USER_JSON=$USERJSON"
+            echo "E2E_TEST_USER_ID=$USERID"
+            echo "E2E_SECRET_FP=$SECRET_FP"
           } >> "$GITHUB_ENV"
           echo "Minted e2e session for ${EMAIL} (user ${USERID})"
+
+      # ── APK cache (local to the persistent runner) ─────────────────
+      #
+      # Rebuilding a byte-equivalent APK is the job's dominant cost
+      # (10-40 min depending on box contention), and re-kicks / web-only
+      # pushes to a labeled PR rebuild identical mobile code every time.
+      # Cache the built APK on the runner's disk, keyed on everything
+      # that changes its bytes or its validity:
+      #   - git tree hashes of apps/mobile + packages/shared (the mobile
+      #     bundle's workspace deps) + pnpm-lock.yaml + this workflow
+      #     (tracked content only, so local workspace junk can't poison
+      #     the key);
+      #   - the e2e stack's AUTH_SECRET fingerprint and the test user's
+      #     id — both are BAKED into the APK (bundled-env auth bypass),
+      #     so a rotated secret or re-created user row must miss;
+      #   - a 3-day TTL, because the baked bearer token is minted with a
+      #     7-day maxAge — a cached APK must never outlive its token.
+      # A hit still re-verifies the inlined backend URL before skipping
+      # the build; verification failure falls through to a rebuild.
+      - name: Check APK cache
+        id: apkcache
+        shell: bash
+        env:
+          # Fingerprinted into the key (never logged): the client id is
+          # baked into strings.xml by the showbook-spotify-sdk plugin at
+          # prebuild, so a rotated secret must miss the cache.
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          CACHE_DIR="$HOME/.cache/showbook-e2e-apk"
+          mkdir -p "$CACHE_DIR"
+          # Evict anything old enough to be useless (well past token TTL).
+          find "$CACHE_DIR" -name '*.apk' -mtime +7 -delete 2>/dev/null || true
+          # Deliberately fail-loud (set -e) if a keyed path is ever
+          # renamed/removed: the key inputs going stale should break this
+          # step visibly so the list gets updated, not silently degrade
+          # into permanent cache misses.
+          SRC=$(git rev-parse HEAD:apps/mobile HEAD:packages/shared HEAD:pnpm-lock.yaml HEAD:.github/workflows/mobile-e2e.yml | sha256sum | cut -c1-24)
+          SPOTIFY_FP=$(printf %s "${SPOTIFY_CLIENT_ID:-}" | sha256sum | cut -c1-8)
+          KEY="${SRC}-${E2E_SECRET_FP}-${E2E_TEST_USER_ID}-${SPOTIFY_FP}"
+          APK="$CACHE_DIR/$KEY.apk"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          if [ -f "$APK" ] && [ -n "$(find "$APK" -mtime -3 2>/dev/null)" ] \
+             && unzip -p "$APK" assets/index.android.bundle 2>/dev/null | strings | grep -aq 'http://10.0.2.2:3004'; then
+            cp "$APK" /tmp/showbook-e2e.apk
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "APK cache HIT ($KEY) — skipping Gradle build"
+          else
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "APK cache miss ($KEY)"
+          fi
 
       # Build the APK locally on the runner instead of going through EAS
       # Build. The runner has Android SDK + build-tools + NDK from
@@ -389,6 +451,7 @@ jobs:
       # inlined at build time, so the Maestro flow YAML doesn't need
       # a deeplink seeding step.
       - name: Build Android APK locally
+        if: steps.apkcache.outputs.hit != 'true'
         working-directory: apps/mobile
         env:
           EXPO_PUBLIC_E2E_MODE: '1'
@@ -447,9 +510,21 @@ jobs:
           # assemble. assembleRelease re-packages because the bundle output
           # changed, while the heavy native tasks reuse the workspace's
           # incremental state.
+          # -PreactNativeArchitectures=x86_64: the e2e APK only ever runs
+          # on the x86_64 emulator, so skip the arm64-v8a / armeabi-v7a /
+          # x86 native compiles (~4x less C++ across expo-modules-core,
+          # worklets, reanimated, and the app CMake targets). Command-line
+          # -P overrides the prebuild-generated gradle.properties. Store
+          # builds (mobile-deploy.yml / EAS) don't pass this and keep all
+          # ABIs. COUPLING: this must match the AVD's ABI — if
+          # vars.ANDROID_AVD_SYSTEM_IMAGE is ever overridden to an arm64
+          # image, update this flag too or `adb install` fails with
+          # INSTALL_FAILED_NO_MATCHING_ABIS.
           ./gradlew :app:createBundleReleaseJsAndAssets \
+            -PreactNativeArchitectures=x86_64 \
             --rerun-tasks --no-daemon --console=plain
           ./gradlew :app:assembleRelease \
+            -PreactNativeArchitectures=x86_64 \
             -x lintVitalAnalyzeRelease -x lintVitalRelease \
             --no-daemon --console=plain \
             --build-cache
@@ -466,6 +541,9 @@ jobs:
             exit 1
           fi
           echo "APK backend URL verified: http://10.0.2.2:3004"
+          # Populate the runner-local APK cache (see "Check APK cache").
+          cp /tmp/showbook-e2e.apk "${{ steps.apkcache.outputs.path }}"
+          echo "cached APK as ${{ steps.apkcache.outputs.key }}"
           echo "::group::Memory after build"
           free -h || true
           df -h "$HOME" || true
