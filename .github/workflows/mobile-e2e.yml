@@ -99,6 +99,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # The failure-publish steps below post whatever is in
+      # /tmp/maestro-debug to the PR. That directory is shared host
+      # state on the self-hosted box: other repos' cloned workflows
+      # write to the same path, so a run that fails BEFORE its own
+      # Maestro steps would otherwise republish another project's
+      # stale screenshots as if they were ours (run 28838402675
+      # posted a different app's frames onto PR #659 this way).
+      # Wipe it up-front so the publish steps can only ever see
+      # artifacts produced by THIS run.
+      - name: Reset maestro debug dir
+        shell: bash
+        run: rm -rf /tmp/maestro-debug
+
       # Diagnose the runner up-front. The previous workflow used to hit
       # the 45-min timeout because nobody knew where the time was going
       # — disk, KVM availability, and SDK presence are the three usual
