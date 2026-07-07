@@ -13,6 +13,16 @@
   `_idCounter` cold-start collision risk, the
   `runOptimisticMutation` snapshot-undefined gating, and renaming
   the Map "Search this area" button (or wiring a real bbox filter).
+- Mirror showbook's mobile-e2e host-isolation fixes (PR #656) in the
+  vacation-price-tracker repo's e2e workflow — the two runners share
+  the box, its adb server, and (formerly) /tmp/maestro-debug. Showbook
+  now pins `ANDROID_SERIAL` (emulator on fixed port 5600), uses a
+  repo-unique debug dir, and never runs `adb kill-server` or unscoped
+  emulator pkills; VPT's workflow should do the same (its own port,
+  its own debug dir) or its cleanup steps will keep killing showbook
+  jobs mid-run and vice versa. Also consider staggering the two
+  repos' e2e schedules so the memory-tight box never runs two
+  emulators + two Gradle builds at once.
 
 ### Web parity follow-ups
 - **Rename a venue from the Discover venue rail (web).** Mobile's

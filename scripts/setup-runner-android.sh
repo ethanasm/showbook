@@ -16,7 +16,7 @@ ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/opt/android-sdk}"
 CMDLINE_TOOLS_VERSION="${CMDLINE_TOOLS_VERSION:-13114758}" # latest as of 2026-05
 SYSTEM_IMAGE="${SYSTEM_IMAGE:-system-images;android-34;google_apis;x86_64}"
 PLATFORM="${PLATFORM:-platforms;android-34}"
-# Gradle build prerequisites — versions match what Expo SDK 55's prebuild
+# Gradle build prerequisites — versions match what Expo SDK 57's prebuild
 # emits (apps/mobile/android/build.gradle ext block). Keep these in sync
 # when bumping Expo.
 BUILD_TOOLS="${BUILD_TOOLS:-build-tools;36.0.0}"

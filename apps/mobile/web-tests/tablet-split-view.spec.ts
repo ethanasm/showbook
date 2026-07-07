@@ -94,6 +94,10 @@ const TRPC_STUBS: Record<string, unknown> = {
       headlinerName: 'The Midnight',
     },
   ],
+  // Must be listed before the feed-shaped `discover.*` fallback below:
+  // the map screen builds `new Set(watchedQuery.data)` from this, and a
+  // non-array crashes the whole route into the error boundary.
+  'discover.watchedAnnouncementIds': [],
 };
 
 async function seedAndStub(page: Page): Promise<void> {

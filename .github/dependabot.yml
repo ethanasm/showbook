@@ -67,6 +67,40 @@ updates:
           - "babel-preset-expo"
           - "eslint-config-expo"
     ignore:
+      # An Expo SDK major is a coordinated MANUAL upgrade (`expo install
+      # --fix` + the root pnpm.overrides bump), never a dependabot PR. The
+      # react-native host and the five override-pinned native modules are
+      # ignore-listed below, so any SDK-major group PR dependabot raises
+      # can only ever land HALF the upgrade: every expo-* package moves to
+      # SDK N+1 while react-native stays on SDK N's pin. CI stays green
+      # (nothing in ci.yml compiles native code) and the break only
+      # surfaces in the mobile-e2e native Gradle build after merge —
+      # exactly #650, which shipped expo-* at SDK 57 against RN 0.85.3 and
+      # broke expo-modules-core's NativeArrayBuffer.cpp on the missing
+      # RN-0.86 jsi::ArrayBuffer::tryGetMutableBuffer API (fixed by #656).
+      # Blocking semver-major on every SDK-coupled package means the
+      # expo-sdk group only raises within-SDK patch/minor updates; the SDK
+      # boundary moves as one manual, natively-verified change. Wildcards:
+      # `react-native-*` deliberately also catches the non-override-pinned
+      # native modules (svg, maps, draggable-flatlist) — their majors are
+      # SDK-blessed too — but not pure-JS `lucide-react-native` (prefix
+      # doesn't match).
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "expo-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@expo/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "babel-preset-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-config-expo"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-native-*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@react-native-community/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@react-native-masked-view/*"
+        update-types: ["version-update:semver-major"]
       # ESLint 10 dropped `scopeManager.addGlobals`, which eslint-config-next
       # 16 and eslint-config-expo 55 still call. Re-enable once both config
       # packages ship ESLint-10-compatible releases.
@@ -90,7 +124,8 @@ updates:
       # adopts Babel 8 (manual override + this ignore bump together).
       - dependency-name: "@babel/core"
       # `react-native` itself is the SDK host ABI. It is hard-pinned in the
-      # root package.json `pnpm.overrides` (to 0.85.3 by #593) AND every
+      # root package.json `pnpm.overrides` (introduced at 0.85.3 by #593;
+      # currently 0.86.0 for SDK 57) AND every
       # native module below compiles against its exact minor. A standalone
       # bump is the worst class of break: #589's expo-sdk group dragged
       # `react-native` to 0.86.0, which (a) deletes the
