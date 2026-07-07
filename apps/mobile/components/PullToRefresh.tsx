@@ -1,41 +1,24 @@
 /**
- * PullToRefresh — small wrapper that wires `RefreshControl` into a
- * scrollable child while honoring the active theme tint colors.
+ * useThemedRefreshControl — builds the app's themed `RefreshControl`
+ * (haptic-gated spinner + failure feedback) for a list or ScrollView's
+ * `refreshControl` prop.
  *
- * Usage:
- *   <PullToRefresh refreshing={isFetching} onRefresh={refetch}>
- *     <ScrollView>...</ScrollView>
- *   </PullToRefresh>
- *
- * For FlatList / SectionList, prefer passing the RefreshControl directly
- * via the list's `refreshControl` prop using `useThemedRefreshControl()`.
- *
- * Haptic gating (selection on pull-start, success on completion) lives
- * in `lib/useRefreshHaptics.ts` so it stays unit-tested.
+ * Haptic gating (selection on pull-start, success/warning on completion)
+ * lives in `lib/useRefreshHaptics.ts` so it stays unit-tested; failure
+ * classification lives in `lib/refresh-failure.ts`.
  */
 
 import React from 'react';
-import {
-  RefreshControl,
-  type RefreshControlProps,
-  type ScrollView,
-  type ScrollViewProps,
-} from 'react-native';
+import { RefreshControl, type RefreshControlProps } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
-import { useAuth } from '@/lib/auth';
+import { signOutAndRedirect, useAuth } from '@/lib/auth';
 import { useFeedback } from '@/lib/feedback';
 import {
   classifyRefreshFailure,
   refreshFailureMessage,
 } from '@/lib/refresh-failure';
 import { useRefreshHaptics } from '@/lib/useRefreshHaptics';
-
-export interface PullToRefreshProps {
-  refreshing: boolean;
-  onRefresh: () => void | PromiseLike<unknown>;
-  children: React.ReactElement<ScrollViewProps>;
-}
 
 /**
  * Build a themed RefreshControl element for use with FlatList / SectionList /
@@ -77,12 +60,7 @@ export function useThemedRefreshControl(
             ? {
                 label: 'Sign in',
                 onPress: () => {
-                  // Mirrors the Me tab's sign-out flow: drop the stale
-                  // token, land on the sign-in screen.
-                  void (async () => {
-                    await signOut();
-                    router.replace('/(auth)/signin');
-                  })();
+                  void signOutAndRedirect(signOut, router);
                 },
               }
             : undefined,
@@ -105,21 +83,4 @@ export function useThemedRefreshControl(
       progressBackgroundColor={tokens.colors.surface}
     />
   );
-}
-
-/**
- * Wrap a single ScrollView child and inject a themed RefreshControl.
- * For FlatList/SectionList, use `useThemedRefreshControl()` directly.
- */
-export function PullToRefresh({
-  refreshing,
-  onRefresh,
-  children,
-}: PullToRefreshProps): React.JSX.Element {
-  const refreshControl = useThemedRefreshControl(refreshing, onRefresh);
-  // Clone the child to inject the refreshControl prop. The child must be
-  // a ScrollView (or compatible component that accepts refreshControl).
-  return React.cloneElement(children as React.ReactElement<ScrollViewProps & React.RefAttributes<ScrollView>>, {
-    refreshControl,
-  });
 }

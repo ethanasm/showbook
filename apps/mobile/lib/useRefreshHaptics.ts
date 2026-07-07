@@ -78,13 +78,16 @@ function loadHaptics(): HapticsModule | null {
   return _haptics;
 }
 
+let _defaultDeps: RefreshHapticsDeps | null = null;
 function defaultDeps(): RefreshHapticsDeps {
+  if (_defaultDeps) return _defaultDeps;
   const mod = loadHaptics();
-  return {
+  _defaultDeps = {
     selection: mod ? mod.hapticSelection : () => undefined,
     success: mod ? mod.hapticSuccess : () => undefined,
     warning: mod ? mod.hapticWarning : () => undefined,
   };
+  return _defaultDeps;
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
@@ -117,6 +120,16 @@ export function useRefreshHaptics(
   const cycleId = React.useRef(0);
   const onFailureRef = React.useRef(onFailure);
   onFailureRef.current = onFailure;
+
+  // Invalidate any in-flight cycle on unmount: a slow pull (retries can
+  // take a few seconds) must not buzz or toast on whatever screen the
+  // user navigated to after leaving this one.
+  React.useEffect(
+    () => () => {
+      cycleId.current += 1;
+    },
+    [],
+  );
 
   React.useEffect(() => {
     if (prevRefreshing.current && !refreshing) {

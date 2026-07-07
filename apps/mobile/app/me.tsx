@@ -28,7 +28,8 @@
  *
  * Sign-out: confirmation Alert before clearing the SecureStore session.
  * After signOut(), `useAuth().user` is null, which makes app/index.tsx
- * redirect to /(auth)/signin on the next render. We also call
+ * redirect to /(auth)/signin on the next render. The shared
+ * `signOutAndRedirect` helper (lib/auth.ts) also calls
  * router.replace('/(auth)/signin') explicitly so the screen swaps even
  * if the index gate doesn't re-mount immediately.
  */
@@ -63,7 +64,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { AdminSection } from '../components/AdminSection';
 import { useTheme, type ThemePreference, type Density } from '@/lib/theme';
 import { RADII } from '@/lib/theme-utils';
-import { useAuth } from '@/lib/auth';
+import { signOutAndRedirect, useAuth } from '@/lib/auth';
 import { trpc } from '@/lib/trpc';
 import { useNetwork, useOfflineSync } from '@/lib/network';
 import { useFeedback } from '@/lib/feedback';
@@ -165,10 +166,7 @@ export default function MeScreen(): React.JSX.Element {
         text: 'Sign out',
         style: 'destructive',
         onPress: () => {
-          void (async () => {
-            await signOut();
-            router.replace('/(auth)/signin');
-          })();
+          void signOutAndRedirect(signOut, router);
         },
       },
     ]);

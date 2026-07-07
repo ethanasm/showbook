@@ -464,3 +464,30 @@ export function AuthProvider({
 export function useAuth(): AuthContextValue {
   return React.useContext(AuthContext);
 }
+
+/**
+ * Sign out and land on the sign-in screen.
+ *
+ * The explicit `router.replace` is required in addition to `signOut()`:
+ * clearing the session does not necessarily re-mount the `app/index.tsx`
+ * auth gate for the screen the user is currently on (see the docblock in
+ * `app/me.tsx`). Shared by the Me tab's Sign out row and the
+ * session-expired feedback surfaces (pull-to-refresh toast, global
+ * banner) so the redirect target and ordering live in exactly one place.
+ *
+ * `signOut` itself never rejects (its SecureStore deletes are
+ * individually caught), but the guard keeps a future regression from
+ * stranding the user on an authenticated screen with a dead token.
+ */
+export async function signOutAndRedirect(
+  signOut: () => Promise<void>,
+  router: { replace: (href: '/(auth)/signin') => void },
+): Promise<void> {
+  try {
+    await signOut();
+  } catch {
+    // Still route to sign-in — a failed cleanup must not trap the user
+    // in a session the server already rejects.
+  }
+  router.replace('/(auth)/signin');
+}

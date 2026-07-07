@@ -649,13 +649,18 @@ export function ShowDetailTabsView({
   // here is per-show and React Query dedupes in-flight requests.
   // Returns the settled results so the themed RefreshControl can
   // surface a failed refresh (server unreachable / session expired)
-  // instead of silently keeping stale data.
+  // instead of silently keeping stale data. shows.detail goes through
+  // refetch({ throwOnError }) rather than invalidate() — invalidate
+  // resolves void even when its refetch errors, which would hide a
+  // detail-only failure from the failure inspection.
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
       return await Promise.all([
-        utils.shows.detail.invalidate({ showId: show.id }),
+        utils.shows.detail.refetch({ showId: show.id }, undefined, {
+          throwOnError: true,
+        }),
         predictionQuery.refetch(),
         badgeQuery.refetch(),
         previewsQuery.refetch(),

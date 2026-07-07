@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import {
   classifyRefreshFailure,
   firstRefetchError,
+  isUnauthorizedError,
   refreshFailureMessage,
 } from '../refresh-failure';
 
@@ -64,6 +65,22 @@ describe('firstRefetchError', () => {
       firstRefetchError([{ status: 'success' }, { status: 'success' }]),
       undefined,
     );
+  });
+});
+
+describe('isUnauthorizedError', () => {
+  it('matches on httpStatus 401 or code UNAUTHORIZED', () => {
+    assert.equal(isUnauthorizedError(trpcErr(401, 'UNAUTHORIZED')), true);
+    assert.equal(isUnauthorizedError(trpcErr(401)), true);
+    assert.equal(isUnauthorizedError(trpcErr(undefined, 'UNAUTHORIZED')), true);
+  });
+
+  it('rejects other errors, including errors without tRPC data', () => {
+    assert.equal(isUnauthorizedError(trpcErr(403, 'FORBIDDEN')), false);
+    assert.equal(isUnauthorizedError(trpcErr(500)), false);
+    assert.equal(isUnauthorizedError(new TypeError('fetch failed')), false);
+    assert.equal(isUnauthorizedError(null), false);
+    assert.equal(isUnauthorizedError(undefined), false);
   });
 });
 

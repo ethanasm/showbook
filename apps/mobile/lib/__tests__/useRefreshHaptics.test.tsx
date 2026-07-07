@@ -77,14 +77,10 @@ function renderHarness(
   const stubs = makeStubs();
   let latest!: RefreshHaptics;
   let refreshCalls = 0;
-  const onRefresh =
-    opts.onRefresh ??
-    (() => {
-      refreshCalls += 1;
-    });
+  const impl = opts.onRefresh ?? (() => undefined);
   const wrappedRefresh = () => {
-    if (opts.onRefresh) refreshCalls += 1;
-    return onRefresh();
+    refreshCalls += 1;
+    return impl();
   };
   const onState = (s: RefreshHaptics) => {
     latest = s;
@@ -121,6 +117,11 @@ function renderHarness(
             onFailure: opts.onFailure,
           }),
         );
+      });
+    },
+    unmount() {
+      TestRenderer.act(() => {
+        renderer.unmount();
       });
     },
   };
@@ -284,6 +285,31 @@ describe('useRefreshHaptics', () => {
     assert.equal(h.stubs.warningCalls, 1);
     assert.equal(h.stubs.successCalls, 0);
     assert.deepEqual(failures, [boom]);
+  });
+
+  it('a pull that settles after unmount fires no haptic and no onFailure', async () => {
+    // User pulls, the request retries for a few seconds, user navigates
+    // away. The late resolution must not toast/buzz on the next screen.
+    let release!: (v: unknown) => void;
+    const slow = new Promise((resolve) => {
+      release = resolve;
+    });
+    const failures: unknown[] = [];
+    const h = renderHarness(false, {
+      onRefresh: () => slow,
+      onFailure: (err) => failures.push(err),
+    });
+    await TestRenderer.act(async () => {
+      h.get().onManualRefresh();
+    });
+    h.unmount();
+    await TestRenderer.act(async () => {
+      release({ status: 'error', error: new Error('late failure') });
+      await slow;
+    });
+    assert.equal(h.stubs.successCalls, 0);
+    assert.equal(h.stubs.warningCalls, 0);
+    assert.deepEqual(failures, []);
   });
 
   it('only the latest of two overlapping pulls fires the completion haptic', async () => {

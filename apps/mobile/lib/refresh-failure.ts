@@ -52,10 +52,18 @@ export function firstRefetchError(result: unknown): unknown | undefined {
  *   the server never gave a usable answer.
  * - `error` — a genuine non-auth application rejection.
  */
-export function classifyRefreshFailure(err: unknown): RefreshFailureKind {
+/**
+ * True when a tRPC rejection means the server refused the bearer token.
+ * Shared with the QueryClient's global onUnauthorized hook in `trpc.ts`.
+ */
+export function isUnauthorizedError(err: unknown): boolean {
   const data = (err as { data?: { httpStatus?: unknown; code?: unknown } } | null | undefined)
     ?.data;
-  if (data?.httpStatus === 401 || data?.code === 'UNAUTHORIZED') return 'session-expired';
+  return data?.httpStatus === 401 || data?.code === 'UNAUTHORIZED';
+}
+
+export function classifyRefreshFailure(err: unknown): RefreshFailureKind {
+  if (isUnauthorizedError(err)) return 'session-expired';
   if (isTransientTrpcError(err)) return 'unreachable';
   return 'error';
 }
