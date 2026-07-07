@@ -13,6 +13,14 @@
   `_idCounter` cold-start collision risk, the
   `runOptimisticMutation` snapshot-undefined gating, and renaming
   the Map "Search this area" button (or wiring a real bbox filter).
+- Pin `ANDROID_SERIAL` in `mobile-e2e.yml` so the job talks only to
+  the emulator it launched. The box's adb server is global: a second
+  device (another repo's runner mid-e2e on the same host) makes bare
+  `adb wait-for-device` / `adb shell` die with "more than one
+  device/emulator". The "Reset stale runner state" step (PR #656)
+  clears *stale* emulators and warns on foreign ones, but a genuinely
+  concurrent sibling-runner emulator still breaks the run — serial
+  pinning is the real fix.
 
 ### Web parity follow-ups
 - **Rename a venue from the Discover venue rail (web).** Mobile's

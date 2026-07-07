@@ -142,6 +142,41 @@ jobs:
           du -sh "$HOME/.gradle/caches" 2>/dev/null || echo "  empty"
           echo "::endgroup::"
 
+      # The runner is self-hosted and the box is shared (other repos'
+      # runners, manual sessions), so a crashed or interrupted run can
+      # leave behind (a) an emulator instance still registered with the
+      # global adb server — a second device makes `adb wait-for-device`
+      # die with "more than one device/emulator" under set -e (run
+      # 28836200584), and (b) a populated /tmp/maestro-debug from a
+      # PREVIOUS run — when this run's capture steps are skipped, the
+      # failure-path publisher scoops those stale files and posts another
+      # app's screenshots as if they were ours (same run). Reset both.
+      # Process kills are scoped to OUR AVD name so a sibling project's
+      # active emulator is never touched; if a foreign device is still
+      # visible afterwards, log it loudly — the wait step will fail and
+      # this group is the diagnosis.
+      - name: Reset stale runner state
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          echo "::group::Stale-state reset"
+          pkill -f "emulator -avd ${ANDROID_AVD_NAME}" 2>/dev/null && echo "killed stale ${ANDROID_AVD_NAME} emulator" || true
+          pkill -f "qemu.*${ANDROID_AVD_NAME}" 2>/dev/null && echo "killed stale ${ANDROID_AVD_NAME} qemu" || true
+          sleep 2
+          rm -f "$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd"/*.lock 2>/dev/null || true
+          rm -rf /tmp/maestro-debug /tmp/maestro-debug-flat
+          adb kill-server 2>/dev/null || true
+          adb start-server 2>/dev/null || true
+          DEVICES=$(adb devices | tail -n +2 | awk 'NF' || true)
+          if [ -n "$DEVICES" ]; then
+            echo "::warning::devices still registered with adb before emulator start (a foreign emulator will break 'Wait for emulator'):"
+            echo "$DEVICES"
+          else
+            echo "adb device list clean"
+          fi
+          echo "::endgroup::"
+
       - uses: pnpm/action-setup@v6
         with:
           version: 10.33.4
