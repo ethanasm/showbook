@@ -400,14 +400,24 @@ jobs:
       - name: Check APK cache
         id: apkcache
         shell: bash
+        env:
+          # Fingerprinted into the key (never logged): the client id is
+          # baked into strings.xml by the showbook-spotify-sdk plugin at
+          # prebuild, so a rotated secret must miss the cache.
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
         run: |
           set -euo pipefail
           CACHE_DIR="$HOME/.cache/showbook-e2e-apk"
           mkdir -p "$CACHE_DIR"
           # Evict anything old enough to be useless (well past token TTL).
           find "$CACHE_DIR" -name '*.apk' -mtime +7 -delete 2>/dev/null || true
+          # Deliberately fail-loud (set -e) if a keyed path is ever
+          # renamed/removed: the key inputs going stale should break this
+          # step visibly so the list gets updated, not silently degrade
+          # into permanent cache misses.
           SRC=$(git rev-parse HEAD:apps/mobile HEAD:packages/shared HEAD:pnpm-lock.yaml HEAD:.github/workflows/mobile-e2e.yml | sha256sum | cut -c1-24)
-          KEY="${SRC}-${E2E_SECRET_FP}-${E2E_TEST_USER_ID}"
+          SPOTIFY_FP=$(printf %s "${SPOTIFY_CLIENT_ID:-}" | sha256sum | cut -c1-8)
+          KEY="${SRC}-${E2E_SECRET_FP}-${E2E_TEST_USER_ID}-${SPOTIFY_FP}"
           APK="$CACHE_DIR/$KEY.apk"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
           echo "path=$APK" >> "$GITHUB_OUTPUT"
@@ -506,7 +516,10 @@ jobs:
           # worklets, reanimated, and the app CMake targets). Command-line
           # -P overrides the prebuild-generated gradle.properties. Store
           # builds (mobile-deploy.yml / EAS) don't pass this and keep all
-          # ABIs.
+          # ABIs. COUPLING: this must match the AVD's ABI — if
+          # vars.ANDROID_AVD_SYSTEM_IMAGE is ever overridden to an arm64
+          # image, update this flag too or `adb install` fails with
+          # INSTALL_FAILED_NO_MATCHING_ABIS.
           ./gradlew :app:createBundleReleaseJsAndAssets \
             -PreactNativeArchitectures=x86_64 \
             --rerun-tasks --no-daemon --console=plain
