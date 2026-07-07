@@ -21,7 +21,6 @@ import {
   Alert,
   Linking,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -51,6 +50,7 @@ import { CACHE_DEFAULTS, invalidateAllShowsLists } from '@/lib/cache';
 import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache/db';
+import { useThemedRefreshControl } from '../PullToRefresh';
 import { ShowTabBar } from './ShowTabBar';
 import { MarkTicketedSheet } from '../MarkTicketedSheet';
 import { OverviewTab, type OverviewLineupEntry } from './OverviewTab';
@@ -647,11 +647,14 @@ export function ShowDetailTabsView({
   // plus the canonical shows.detail (so a stale state pill / setlist
   // upstream change picks up). Cheap to over-refetch — every query
   // here is per-show and React Query dedupes in-flight requests.
+  // Returns the settled results so the themed RefreshControl can
+  // surface a failed refresh (server unreachable / session expired)
+  // instead of silently keeping stale data.
   const [refreshing, setRefreshing] = React.useState(false);
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
+      return await Promise.all([
         utils.shows.detail.invalidate({ showId: show.id }),
         predictionQuery.refetch(),
         badgeQuery.refetch(),
@@ -669,6 +672,7 @@ export function ShowDetailTabsView({
     show.id,
     utils,
   ]);
+  const refreshControl = useThemedRefreshControl(refreshing, onRefresh);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
@@ -683,13 +687,7 @@ export function ShowDetailTabsView({
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.muted}
-            />
-          }
+          refreshControl={refreshControl}
         >
           {active === 'overview' ? overviewPanel : null}
           {active === 'setlist' && !isTabHidden('setlist') ? setlistPanel : null}

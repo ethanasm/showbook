@@ -221,14 +221,13 @@ export default function VenueDetailScreen(): React.JSX.Element {
         showsQuery.isLoading &&
         mediaQuery.isLoading
       ),
-    () => {
-      void Promise.all([
+    () =>
+      Promise.all([
         detailQuery.refetch(),
         upcomingQuery.refetch(),
         showsQuery.refetch(),
         mediaQuery.refetch(),
-      ]);
-    },
+      ]),
   );
 
   return (

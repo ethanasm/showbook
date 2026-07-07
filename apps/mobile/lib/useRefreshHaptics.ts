@@ -19,6 +19,17 @@
  * which flips `isFetching` true → false on every active query). Gating
  * on `manualRefreshing` keeps the spinner invisible for those.
  *
+ * Failure surfacing: when `onRefresh` returns a promise (every call
+ * site returns its `refetch()` / `Promise.all([...refetch()])` result),
+ * the hook inspects the resolution with `firstRefetchError` — React
+ * Query's `refetch()` resolves with `status: 'error'` instead of
+ * rejecting — and on failure fires the *warning* haptic and the
+ * `onFailure` callback instead of pretending the pull succeeded. This
+ * is what makes "server down / session expired" visible to the user
+ * (both were silent no-ops before; see `lib/refresh-failure.ts`).
+ * A sync `onRefresh` keeps the legacy behaviour: success haptic when
+ * `refreshing` flips back to false.
+ *
  * Lives in `lib/` (not next to `PullToRefresh.tsx`) so it lands inside
  * the mobile coverage gate and stays unit-testable. The default haptic
  * deps are pulled in via require() rather than a top-level import so
@@ -27,6 +38,8 @@
  */
 
 import React from 'react';
+
+import { firstRefetchError } from './refresh-failure';
 
 export interface RefreshHaptics {
   /** Wrap the consumer's onRefresh; fires the selection haptic + marks the cycle as manual. */
@@ -42,11 +55,13 @@ export interface RefreshHaptics {
 export interface RefreshHapticsDeps {
   selection: () => Promise<void> | void;
   success: () => Promise<void> | void;
+  warning: () => Promise<void> | void;
 }
 
 interface HapticsModule {
   hapticSelection: () => Promise<void>;
   hapticSuccess: () => Promise<void>;
+  hapticWarning: () => Promise<void>;
 }
 
 let _haptics: HapticsModule | null = null;
@@ -68,24 +83,47 @@ function defaultDeps(): RefreshHapticsDeps {
   return {
     selection: mod ? mod.hapticSelection : () => undefined,
     success: mod ? mod.hapticSuccess : () => undefined,
+    warning: mod ? mod.hapticWarning : () => undefined,
   };
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 export function useRefreshHaptics(
   refreshing: boolean,
-  onRefresh: () => void,
+  onRefresh: () => void | PromiseLike<unknown>,
   // Injectable for tests; production code resolves to the real haptics
   // via the lazy require above.
   deps?: RefreshHapticsDeps,
+  /** Called with the failing query's error when a manual refresh cycle fails. */
+  onFailure?: (err: unknown) => void,
 ): RefreshHaptics {
   const resolvedDeps = deps ?? defaultDeps();
   const [manualRefreshing, setManualRefreshing] = React.useState(false);
   const prevRefreshing = React.useRef(refreshing);
+  // When the current manual cycle is promise-driven, the completion haptic
+  // fires from the promise resolution (where the outcome is known), not
+  // from the refreshing flip — otherwise a failed pull would still buzz
+  // success from the effect below.
+  const promiseDriven = React.useRef(false);
+  // Monotonic pull counter so an older in-flight pull can't fire haptics
+  // after a newer pull superseded it (double-pull while slow).
+  const cycleId = React.useRef(0);
+  const onFailureRef = React.useRef(onFailure);
+  onFailureRef.current = onFailure;
 
   React.useEffect(() => {
     if (prevRefreshing.current && !refreshing) {
       if (manualRefreshing) {
-        void resolvedDeps.success();
+        if (!promiseDriven.current) {
+          void resolvedDeps.success();
+        }
         setManualRefreshing(false);
       }
     }
@@ -95,7 +133,31 @@ export function useRefreshHaptics(
   const onManualRefresh = React.useCallback(() => {
     setManualRefreshing(true);
     void resolvedDeps.selection();
-    onRefresh();
+    const result = onRefresh();
+    if (!isThenable(result)) {
+      promiseDriven.current = false;
+      return;
+    }
+    promiseDriven.current = true;
+    cycleId.current += 1;
+    const id = cycleId.current;
+    result.then(
+      (resolution) => {
+        if (id !== cycleId.current) return;
+        const err = firstRefetchError(resolution);
+        if (err !== undefined) {
+          void resolvedDeps.warning();
+          onFailureRef.current?.(err);
+        } else {
+          void resolvedDeps.success();
+        }
+      },
+      (err: unknown) => {
+        if (id !== cycleId.current) return;
+        void resolvedDeps.warning();
+        onFailureRef.current?.(err);
+      },
+    );
   }, [onRefresh, resolvedDeps]);
 
   return { onManualRefresh, manualRefreshing };

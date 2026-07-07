@@ -460,9 +460,7 @@ export default function DiscoverScreen(): React.JSX.Element {
 
   const refreshControl = useThemedRefreshControl(
     isBackgroundRefetching,
-    () => {
-      void activeQuery.refetch();
-    },
+    () => activeQuery.refetch(),
   );
 
   const searchAction = (

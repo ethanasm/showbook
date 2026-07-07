@@ -21,12 +21,19 @@ import {
   type ScrollView,
   type ScrollViewProps,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
+import { useAuth } from '@/lib/auth';
+import { useFeedback } from '@/lib/feedback';
+import {
+  classifyRefreshFailure,
+  refreshFailureMessage,
+} from '@/lib/refresh-failure';
 import { useRefreshHaptics } from '@/lib/useRefreshHaptics';
 
 export interface PullToRefreshProps {
   refreshing: boolean;
-  onRefresh: () => void;
+  onRefresh: () => void | PromiseLike<unknown>;
   children: React.ReactElement<ScrollViewProps>;
 }
 
@@ -42,13 +49,53 @@ export interface PullToRefreshProps {
  * hop invalidates all active queries on every app resume, and rapid
  * `refreshing` toggles leave the native spinner spinning. See the
  * `useRefreshHaptics` docblock for the manual-cycle bookkeeping.
+ *
+ * `onRefresh` should RETURN its `refetch()` promise (or a `Promise.all`
+ * of several) rather than `void`ing it: the resolution is inspected so a
+ * failed manual refresh surfaces as an error toast — "session expired",
+ * "can't reach Showbook", or a generic failure — instead of silently
+ * leaving stale data on screen (the offline-first cache means the screen
+ * looks identical either way, which is exactly why the user has to be
+ * told).
  */
 export function useThemedRefreshControl(
   refreshing: boolean,
-  onRefresh: () => void,
+  onRefresh: () => void | PromiseLike<unknown>,
 ): React.ReactElement<RefreshControlProps> {
   const { tokens } = useTheme();
-  const { onManualRefresh, manualRefreshing } = useRefreshHaptics(refreshing, onRefresh);
+  const { showToast } = useFeedback();
+  const { signOut } = useAuth();
+  const router = useRouter();
+  const onRefreshFailure = React.useCallback(
+    (err: unknown) => {
+      const kind = classifyRefreshFailure(err);
+      showToast({
+        kind: 'error',
+        text: refreshFailureMessage(kind),
+        action:
+          kind === 'session-expired'
+            ? {
+                label: 'Sign in',
+                onPress: () => {
+                  // Mirrors the Me tab's sign-out flow: drop the stale
+                  // token, land on the sign-in screen.
+                  void (async () => {
+                    await signOut();
+                    router.replace('/(auth)/signin');
+                  })();
+                },
+              }
+            : undefined,
+      });
+    },
+    [showToast, signOut, router],
+  );
+  const { onManualRefresh, manualRefreshing } = useRefreshHaptics(
+    refreshing,
+    onRefresh,
+    undefined,
+    onRefreshFailure,
+  );
   return (
     <RefreshControl
       refreshing={manualRefreshing && refreshing}
