@@ -100,9 +100,9 @@ export default function ArtistsListScreen(): React.JSX.Element {
     !listQuery.data &&
     !followedQuery.data;
   const isFetching = listQuery.isFetching || followedQuery.isFetching;
-  const refreshControl = useThemedRefreshControl(isFetching && !isLoading, () => {
-    void Promise.all([listQuery.refetch(), followedQuery.refetch()]);
-  });
+  const refreshControl = useThemedRefreshControl(isFetching && !isLoading, () =>
+    Promise.all([listQuery.refetch(), followedQuery.refetch()]),
+  );
 
   const back = (
     <Pressable

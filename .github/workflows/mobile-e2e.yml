@@ -194,10 +194,19 @@ jobs:
         with:
           version: 10.33.4
 
+      # No `cache: pnpm` here — same reasoning as the Gradle/AVD
+      # actions/cache removal below. On this persistent self-hosted
+      # runner the pnpm store already lives on local disk, so the
+      # GitHub-cache round-trip saves nothing; worse, the post-job
+      # cache-save resolves the store path at step-setup time and the
+      # sibling repo's runner on the shared box can delete that store
+      # dir mid-job, making the save fail the ENTIRE job after every
+      # real step (build + Maestro) already passed — run 28844954554
+      # died exactly that way ("Path Validation Error" in the
+      # setup-node post step).
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -41,7 +41,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
 
 import { ThemeProvider, useTheme } from '@/lib/theme';
-import { AuthProvider, useAuth } from '@/lib/auth';
+import { AuthProvider, signOutAndRedirect, useAuth } from '@/lib/auth';
 import { trpc, createQueryClient, createTrpcClient } from '@/lib/trpc';
 import { setMobileTelemetryLogger } from '@/lib/telemetry';
 import { CacheBridge } from '@/lib/cache/CacheBridge';
@@ -407,10 +407,16 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
   // Both the QueryClient and the tRPC client are created exactly once.
   // The headers function on the http link reads tokenRef.current on every
   // request, so a fresh sign-in or sign-out is reflected immediately.
-  const [queryClient] = React.useState(createQueryClient);
+  // The onUnauthorized hook routes through a ref so the once-created
+  // client always reaches the current banner wiring below.
+  const onUnauthorizedRef = React.useRef<() => void>(() => undefined);
+  const [queryClient] = React.useState(() =>
+    createQueryClient({ onUnauthorized: () => onUnauthorizedRef.current() }),
+  );
   const [trpcClient] = React.useState(() =>
     createTrpcClient(() => tokenRef.current),
   );
+  useSessionExpiredBanner(onUnauthorizedRef);
 
   // Wire the mobile telemetry sink to the tRPC client so any failed
   // procedure (or out-of-band failure like an R2 PUT 403) round-trips to
@@ -446,6 +452,66 @@ function TrpcProviders({ children }: { children: React.ReactNode }): React.JSX.E
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
+}
+
+/**
+ * Global session-expiry surface. The QueryClient's `onUnauthorized`
+ * hook (see `createQueryClient`) fires for every 401-rejected query or
+ * mutation; this hook debounces that into a single persistent banner
+ * with a "Sign in" action. Without it an expired session is invisible:
+ * the offline-first cache keeps every screen looking populated while
+ * background refetches 401 quietly (the 2026-07-05 incident — the user
+ * browsed search/map/discover for a minute before finding sign-out by
+ * hand). The pull-to-refresh toast covers the manual path; this covers
+ * every other entry point.
+ *
+ * The banner only arms while a token is present (an anonymous 401 on
+ * the sign-in screen is normal), dedupes to one instance, and clears
+ * itself on any token transition (re-sign-in mints a new token;
+ * sign-out makes it moot).
+ */
+function useSessionExpiredBanner(
+  onUnauthorizedRef: React.MutableRefObject<() => void>,
+): void {
+  const { token, signOut } = useAuth();
+  const { showBanner, dismissBanner } = useFeedback();
+  const router = useRouter();
+  const bannerIdRef = React.useRef<string | null>(null);
+  const tokenRef = React.useRef<string | null>(token);
+  tokenRef.current = token;
+
+  React.useEffect(() => {
+    onUnauthorizedRef.current = () => {
+      if (!tokenRef.current) return; // signed out — 401s are expected
+      if (bannerIdRef.current) return; // already showing
+      bannerIdRef.current = showBanner({
+        kind: 'error',
+        text: 'Session expired — sign in again to sync.',
+        action: {
+          label: 'Sign in',
+          onPress: () => {
+            if (bannerIdRef.current) {
+              dismissBanner(bannerIdRef.current);
+              bannerIdRef.current = null;
+            }
+            void signOutAndRedirect(signOut, router);
+          },
+        },
+      });
+    };
+    return () => {
+      onUnauthorizedRef.current = () => undefined;
+    };
+  }, [onUnauthorizedRef, showBanner, dismissBanner, signOut, router]);
+
+  // Any token transition invalidates the banner: a fresh sign-in mints a
+  // new token, and sign-out lands on the sign-in screen anyway.
+  React.useEffect(() => {
+    if (bannerIdRef.current) {
+      dismissBanner(bannerIdRef.current);
+      bannerIdRef.current = null;
+    }
+  }, [token, dismissBanner]);
 }
 
 /**

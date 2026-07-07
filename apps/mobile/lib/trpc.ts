@@ -10,7 +10,7 @@
  * we don't need to recreate the tRPC client when the user signs in/out.
  */
 
-import { MutationCache, QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { createTRPCReact, httpBatchLink } from '@trpc/react-query';
 import { observable } from '@trpc/server/observable';
 import type { TRPCLink } from '@trpc/client';
@@ -19,6 +19,7 @@ import type { AppRouter } from '@showbook/api';
 import { API_URL } from './env';
 import { hapticSuccess, hapticWarning } from './haptics';
 import { reportClientEvent, describeError } from './telemetry';
+import { isUnauthorizedError } from './refresh-failure';
 import { isTransientTrpcError, shouldRetryQuery, trpcRetryDelay } from './trpc-retry';
 
 export const trpc = createTRPCReact<AppRouter>();
@@ -50,8 +51,26 @@ declare module '@tanstack/react-query' {
   }
 }
 
-export function createQueryClient(): QueryClient {
+export interface CreateQueryClientOptions {
+  /**
+   * Fired whenever any query or mutation fails with an UNAUTHORIZED /
+   * 401 rejection — the server no longer accepts the bearer token. The
+   * layout wires this to a persistent "session expired" banner so an
+   * expired session surfaces even when every screen is quietly reading
+   * the offline cache (the 2026-07-05 incident: all queries 401'd
+   * silently while the app kept rendering stale data). Deduplication is
+   * the subscriber's job; this fires once per failed operation.
+   */
+  onUnauthorized?: (err: unknown) => void;
+}
+
+export function createQueryClient(opts: CreateQueryClientOptions = {}): QueryClient {
   return new QueryClient({
+    queryCache: new QueryCache({
+      onError: (err) => {
+        if (isUnauthorizedError(err)) opts.onUnauthorized?.(err);
+      },
+    }),
     mutationCache: new MutationCache({
       onSuccess: (_data, _vars, _ctx, mutation) => {
         const cue = mutation.meta?.haptic;
@@ -63,8 +82,9 @@ export function createQueryClient(): QueryClient {
         // Default: success cue on every mutation resolution.
         void hapticSuccess();
       },
-      onError: () => {
+      onError: (err) => {
         void hapticWarning();
+        if (isUnauthorizedError(err)) opts.onUnauthorized?.(err);
       },
     }),
     defaultOptions: {

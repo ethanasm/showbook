@@ -378,9 +378,7 @@ function ShowsListPane(): React.JSX.Element {
 
   const refreshControl = useThemedRefreshControl(
     showsQuery.isFetching && !showsQuery.isLoading,
-    () => {
-      void showsQuery.refetch();
-    },
+    () => showsQuery.refetch(),
   );
 
   const onLongPressShow = React.useCallback((row: ShowRow) => {

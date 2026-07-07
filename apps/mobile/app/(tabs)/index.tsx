@@ -269,9 +269,7 @@ export default function HomeScreen(): React.JSX.Element {
 
   const refreshControl = useThemedRefreshControl(
     showsQuery.isFetching && !showsQuery.isLoading,
-    () => {
-      void showsQuery.refetch();
-    },
+    () => showsQuery.refetch(),
   );
 
   const sections = React.useMemo(() => {

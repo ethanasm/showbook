@@ -1,34 +1,24 @@
 /**
- * PullToRefresh — small wrapper that wires `RefreshControl` into a
- * scrollable child while honoring the active theme tint colors.
+ * useThemedRefreshControl — builds the app's themed `RefreshControl`
+ * (haptic-gated spinner + failure feedback) for a list or ScrollView's
+ * `refreshControl` prop.
  *
- * Usage:
- *   <PullToRefresh refreshing={isFetching} onRefresh={refetch}>
- *     <ScrollView>...</ScrollView>
- *   </PullToRefresh>
- *
- * For FlatList / SectionList, prefer passing the RefreshControl directly
- * via the list's `refreshControl` prop using `useThemedRefreshControl()`.
- *
- * Haptic gating (selection on pull-start, success on completion) lives
- * in `lib/useRefreshHaptics.ts` so it stays unit-tested.
+ * Haptic gating (selection on pull-start, success/warning on completion)
+ * lives in `lib/useRefreshHaptics.ts` so it stays unit-tested; failure
+ * classification lives in `lib/refresh-failure.ts`.
  */
 
 import React from 'react';
-import {
-  RefreshControl,
-  type RefreshControlProps,
-  type ScrollView,
-  type ScrollViewProps,
-} from 'react-native';
+import { RefreshControl, type RefreshControlProps } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/lib/theme';
+import { signOutAndRedirect, useAuth } from '@/lib/auth';
+import { useFeedback } from '@/lib/feedback';
+import {
+  classifyRefreshFailure,
+  refreshFailureMessage,
+} from '@/lib/refresh-failure';
 import { useRefreshHaptics } from '@/lib/useRefreshHaptics';
-
-export interface PullToRefreshProps {
-  refreshing: boolean;
-  onRefresh: () => void;
-  children: React.ReactElement<ScrollViewProps>;
-}
 
 /**
  * Build a themed RefreshControl element for use with FlatList / SectionList /
@@ -42,13 +32,48 @@ export interface PullToRefreshProps {
  * hop invalidates all active queries on every app resume, and rapid
  * `refreshing` toggles leave the native spinner spinning. See the
  * `useRefreshHaptics` docblock for the manual-cycle bookkeeping.
+ *
+ * `onRefresh` should RETURN its `refetch()` promise (or a `Promise.all`
+ * of several) rather than `void`ing it: the resolution is inspected so a
+ * failed manual refresh surfaces as an error toast — "session expired",
+ * "can't reach Showbook", or a generic failure — instead of silently
+ * leaving stale data on screen (the offline-first cache means the screen
+ * looks identical either way, which is exactly why the user has to be
+ * told).
  */
 export function useThemedRefreshControl(
   refreshing: boolean,
-  onRefresh: () => void,
+  onRefresh: () => void | PromiseLike<unknown>,
 ): React.ReactElement<RefreshControlProps> {
   const { tokens } = useTheme();
-  const { onManualRefresh, manualRefreshing } = useRefreshHaptics(refreshing, onRefresh);
+  const { showToast } = useFeedback();
+  const { signOut } = useAuth();
+  const router = useRouter();
+  const onRefreshFailure = React.useCallback(
+    (err: unknown) => {
+      const kind = classifyRefreshFailure(err);
+      showToast({
+        kind: 'error',
+        text: refreshFailureMessage(kind),
+        action:
+          kind === 'session-expired'
+            ? {
+                label: 'Sign in',
+                onPress: () => {
+                  void signOutAndRedirect(signOut, router);
+                },
+              }
+            : undefined,
+      });
+    },
+    [showToast, signOut, router],
+  );
+  const { onManualRefresh, manualRefreshing } = useRefreshHaptics(
+    refreshing,
+    onRefresh,
+    undefined,
+    onRefreshFailure,
+  );
   return (
     <RefreshControl
       refreshing={manualRefreshing && refreshing}
@@ -58,21 +83,4 @@ export function useThemedRefreshControl(
       progressBackgroundColor={tokens.colors.surface}
     />
   );
-}
-
-/**
- * Wrap a single ScrollView child and inject a themed RefreshControl.
- * For FlatList/SectionList, use `useThemedRefreshControl()` directly.
- */
-export function PullToRefresh({
-  refreshing,
-  onRefresh,
-  children,
-}: PullToRefreshProps): React.JSX.Element {
-  const refreshControl = useThemedRefreshControl(refreshing, onRefresh);
-  // Clone the child to inject the refreshControl prop. The child must be
-  // a ScrollView (or compatible component that accepts refreshControl).
-  return React.cloneElement(children as React.ReactElement<ScrollViewProps & React.RefAttributes<ScrollView>>, {
-    refreshControl,
-  });
 }
