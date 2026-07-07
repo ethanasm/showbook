@@ -82,7 +82,7 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3001/api/health/live > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:3001/api/health/live || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
