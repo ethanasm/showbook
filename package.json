@@ -69,10 +69,10 @@
     "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {
-    "@types/node": "^26.1.0",
+    "@types/node": "^26.1.1",
     "nx": "^23.0.1",
     "tsx": "^4.23.0",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   },
   "pnpm": {
     "overrides": {
