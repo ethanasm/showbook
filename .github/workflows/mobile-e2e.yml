@@ -208,7 +208,7 @@ jobs:
       # real step (build + Maestro) already passed — run 28844954554
       # died exactly that way ("Path Validation Error" in the
       # setup-node post step).
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
