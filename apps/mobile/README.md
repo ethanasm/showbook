@@ -1,8 +1,8 @@
 # Showbook Mobile
 
-Expo + TypeScript app for Showbook. See
-[`docs/specs/mobile-roadmap.md`](../../docs/specs/mobile-roadmap.md)
-for the milestone plan.
+Expo + TypeScript app for Showbook. See [`CLAUDE.md`](CLAUDE.md) for
+conventions; the historical milestone plan lives in the knowledge
+vault (`brain/projects/showbook/plans/mobile-build.md`).
 
 ## Setup
 
@@ -92,8 +92,9 @@ MKCERT_ROOT_CA=/absolute/path/to/rootCA.pem pnpm mobile:ios
 
 ## Status
 
-See [`docs/specs/mobile-roadmap.md`](../../docs/specs/mobile-roadmap.md)
-for the milestone plan, what's shipped, and what's next.
+Feature-complete against the design handoff. The milestone history
+and the follow-up backlog live in the knowledge vault
+(`brain/projects/showbook/plans/`).
 
 ## Maestro E2E flows
 

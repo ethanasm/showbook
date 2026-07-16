@@ -9,7 +9,8 @@ introduces a never-before-seen field is rejected wholesale** — the rejection
 appears only in `docker logs showbook-prod-web`, never in Axiom.
 
 The May-2026 fix split the original `showbook-prod` into `prod-server` +
-`prod-mobile` (see [`axiom-dataset-cutover.md`](./axiom-dataset-cutover.md)).
+`prod-mobile` (cutover history recorded in the knowledge vault,
+`brain/projects/showbook/decisions/2026-05-axiom-dataset-cutover.md`).
 That only *doubled* the budget — it didn't *bound* it — so `prod-server`
 filled up again in June 2026 (Axiom emailed that ingest was being rejected).
 

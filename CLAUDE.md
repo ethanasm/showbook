@@ -123,13 +123,15 @@ What the sandbox actually *can't* do, for the avoidance of further wrong excuses
 - `docs/specs/` — All specs: schema, data sources, pipelines,
   infrastructure, decisions. Index at
   [`docs/specs/README.md`](docs/specs/README.md).
-- `docs/specs/TASKS.md` — Master task list with dependency DAG.
 - `docs/specs/VERIFICATION.md` — Playwright testing + visual
   verification strategy.
-- `docs/specs/mobile-roadmap.md` — Mobile build plan; the app
-  is feature-complete against the design handoff.
 - `docs/design/` — Hi-fi prototypes from Claude Design (reference only,
   don't modify).
+- The mobile app is feature-complete against the design handoff.
+  Historical planning (greenfield task DAG, mobile roadmap, feature
+  plans, review write-ups) lives in the private knowledge vault —
+  `brain/projects/showbook/` in the workspace, entry point
+  `showbook.md`.
 
 ## Cross-platform parity
 
@@ -157,9 +159,10 @@ Before you finalise a change, ask:
 
 If you're intentionally scoping work down (e.g. shipping web first,
 mobile in a follow-up), say so explicitly in the PR body and track
-the second-surface work somewhere durable (issue, TODO in
-`docs/specs/planned-improvements.md`) — don't ship asymmetric
-features silently.
+the second-surface work somewhere durable (issue, or the
+planned-improvements backlog in the knowledge vault:
+`brain/projects/showbook/plans/planned-improvements.md`) — don't
+ship asymmetric features silently.
 
 ## Key decisions
 
@@ -274,7 +277,7 @@ All new code MUST use the shared `@showbook/observability` package — no `conso
 
 **Where logs go (per env):**
 - **dev / local** — stdout only, pretty-printed via `pino-pretty`. `AXIOM_TOKEN` and `AXIOM_DATASET` are intentionally unset in `.env.dev` / `apps/web/.env.local`, so dev runs never ship to Axiom. Tests rely on this — don't set `AXIOM_TOKEN` in CI.
-- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom via `@axiomhq/pino`. **One dataset, `showbook-prod` (`AXIOM_DATASET`):** all logs land there — app/server logs plus mobile telemetry (the `mobile.*` events relayed through the `telemetry.logEvent` tRPC router, bound with `component: 'mobile.telemetry'`). Before ingest every record is reshaped by `reshapeForAxiom` in `packages/observability/src/logger.ts`: only the `CORE_FIELDS` allowlist stays as top-level columns and every other key folds into a single `fields` **map field**, so the dataset stays under Axiom's per-dataset column cap no matter what call-sites log (stdout / `docker logs` stay flat — the reshape is on the Axiom stream only). The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (a service token, not a query token) and must have ingest on `showbook-prod`; reading prod logs requires a separate user-scoped token (see "Querying Axiom" below). See `docs/specs/operations/axiom-map-fields.md`. (The earlier `prod-server` + `prod-mobile` split — `docs/specs/operations/axiom-dataset-cutover.md` — is superseded by this merge.)
+- **prod** — stdout (JSON via `pino`, captured by Docker) AND shipped to Axiom via `@axiomhq/pino`. **One dataset, `showbook-prod` (`AXIOM_DATASET`):** all logs land there — app/server logs plus mobile telemetry (the `mobile.*` events relayed through the `telemetry.logEvent` tRPC router, bound with `component: 'mobile.telemetry'`). Before ingest every record is reshaped by `reshapeForAxiom` in `packages/observability/src/logger.ts`: only the `CORE_FIELDS` allowlist stays as top-level columns and every other key folds into a single `fields` **map field**, so the dataset stays under Axiom's per-dataset column cap no matter what call-sites log (stdout / `docker logs` stay flat — the reshape is on the Axiom stream only). The `AXIOM_TOKEN` in `.env.prod` is **ingest-only by design** (a service token, not a query token) and must have ingest on `showbook-prod`; reading prod logs requires a separate user-scoped token (see "Querying Axiom" below). See `docs/specs/operations/axiom-map-fields.md`. (The earlier `prod-server` + `prod-mobile` split is superseded by this merge; the cutover's history is recorded in the knowledge vault, `brain/projects/showbook/decisions/2026-05-axiom-dataset-cutover.md`.)
 
 **Querying Axiom from the CLI (read access):**
 The repo-side `AXIOM_TOKEN` cannot read logs. To query, use a Personal Access Token (PAT) you create in the Axiom UI under Settings → Profile → Personal Access Tokens (or an advanced API token with the `Query` capability granted on the `showbook-prod` dataset). PATs and most advanced API tokens require the `X-AXIOM-ORG-ID` header.
@@ -339,7 +342,7 @@ The stdout copy in the prod web container (`docker logs showbook-prod-web`) is a
 - `notifications.digest.summary` — daily email digest. Per-user outcomes log as `notifications.digest.sent` on a Resend-accepted send, `notifications.digest.send_failed` when Resend returns a non-throwing error response (the SDK resolves with `{ data: null, error }` on bounces / unverified-domain / rate-limit so the rejection has to be inspected on the result), `notifications.digest.failed` for unexpected exceptions in the per-user loop, `notifications.digest.already_sent_today` for the per-user idempotency skip, `notifications.digest.dry_run` when `RESEND_API_KEY` is unset, and `notifications.digest.preamble_failed` when Groq preamble generation falls back to the static greeting.
 - `pgboss.{started,stopped,registered,shutdown.start,shutdown.complete,shutdown.failed,register.invoked,register.duplicate,boot.ok,boot.failed}` — pg-boss lifecycle. The `shutdown.*` events fire from the Next.js SIGTERM/SIGINT handler in `apps/web/instrumentation.ts`; absence of a `shutdown.start` before a `started` means the previous boot was killed without graceful release of in-flight jobs. `register.invoked` carries a per-process counter so Axiom can confirm whether Next.js invokes `register()` more than once per process; `register.duplicate` fires when `registerAllJobs` is called twice against the same boss instance and the second call is suppressed (this is the guard that prevents the doubled `boss.work` registrations that surfaced as duplicate `job.start` events for every cron job in May 2026).
 - `env.validate.{ok,failed}` — boot-time environment validation in `apps/web/instrumentation.ts` (logic in `apps/web/lib/validate-env.ts`). `failed` carries `problems` (the list of missing/malformed required vars: `AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `DATABASE_URL`, `NEXTAUTH_URL`, `TOKEN_KEY`). In production a `failed` is fatal — the process logs, flushes, and `process.exit(1)` (visible crash-loop under `restart: unless-stopped`) rather than serving a half-configured app; outside production it's a warning so dev/test/e2e stub envs aren't crashed.
-- `gmail.scan.{truncated,summary,dedup.skipped,attachment.used,attachment.fetch_failed,attachment.parse_failed,attachment.llm_failed}` — Gmail scan orchestrator (`apps/web/app/api/gmail/scan/route.ts`). `summary` rolls up per-scan counts (`heuristicSkipped`, `pdfFallbackUsed`, `dedupSkipped`, `extracted`); the `attachment.*` events trace the R1 PDF-fallback branch; `dedup.skipped` is the P4 cross-scan dedup short-circuit fired before any Groq call. See `docs/specs/email-ingestion-improvements-2026-05-08.md`.
+- `gmail.scan.{truncated,summary,dedup.skipped,attachment.used,attachment.fetch_failed,attachment.parse_failed,attachment.llm_failed}` — Gmail scan orchestrator (`apps/web/app/api/gmail/scan/route.ts`). `summary` rolls up per-scan counts (`heuristicSkipped`, `pdfFallbackUsed`, `dedupSkipped`, `extracted`); the `attachment.*` events trace the R1 PDF-fallback branch; `dedup.skipped` is the P4 cross-scan dedup short-circuit fired before any Groq call. (R1/P1/P4 refer to the 2026-05-08 email-ingestion improvement plan, now in the knowledge vault.)
 - `gmail.bulk_scan.{truncated,collected,batch,complete}` — user-triggered Gmail bulk-scan tRPC flow (`enrichment.bulkScan`): collects messages paged up to a cap (`truncated` carries `{cap, userId}`), LLM-parses in batches (`batch` is debug), dedups by show content, and rolls up in `complete`.
 - `eventbrite.callback.{state_mismatch,no_access_token,token_exchange_failed}` (warn), `eventbrite.request.{ok,error,rate_limited}` (`ok` debug, rest warn, carry `{path, status, durationMs}`), `eventbrite.scan.{complete,failed}` — Eventbrite OAuth callback, API-client boundary, and past-orders import scan (`/api/eventbrite/*` routes + `packages/api/src/eventbrite.ts`), gated on the `EventbriteImportEnabled` feature flag.
 - `apple_music_import.{config_missing,list.success,list.failed,import.success}` / `apple_music.request.{error,rate_limited}` / `spotify_import.{list.success,list.failed,import.success}` — followed/library-artist import mutations (`routers/apple-music-import.ts`, `routers/spotify-import.ts`): `list.*` resolves the user's artists against Ticketmaster (`{userId, total, resolved, matched}`), `import.success` persists the selection (`{imported, skipped}`); `apple_music.request.*` are the Apple Music client boundaries.
@@ -394,8 +397,10 @@ If a new code path doesn't fit these patterns (e.g. a CLI script), extend the pa
 ## For agents
 
 Read `docs/specs/README.md` first. It indexes all spec files.
-Read `docs/specs/TASKS.md` for the full task breakdown and dependency graph.
-Each task specifies which spec files to read and how to verify completion.
+Project history — decision logs (D1–D24), the greenfield/mobile build
+plans, reviews, and the live planned-improvements backlog — lives in
+the private knowledge vault (`brain/projects/showbook/` in the
+workspace); the in-repo specs are the operative contracts.
 
 When the work is web- or mobile-specific, read the relevant per-app
 CLAUDE — they document the conventions you'll need to follow inside

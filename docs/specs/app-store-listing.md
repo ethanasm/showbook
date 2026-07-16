@@ -11,7 +11,8 @@ edits.
 Scope notes (keep the copy honest):
 
 - **No push-notification claims.** The client-side toggle exists but
-  server-side delivery isn't wired yet (`docs/specs/planned-improvements.md`).
+  server-side delivery isn't wired yet (tracked in the knowledge vault
+  backlog, `brain/projects/showbook/plans/planned-improvements.md`).
   Announcements are surfaced in the Discover feed and the daily email digest
   only — the copy says exactly that.
 - **No social claims.** Showbook is deliberately personal — no friend graph,

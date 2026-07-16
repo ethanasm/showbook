@@ -1,7 +1,7 @@
 /**
  * Home tab — M2.B real implementation.
  *
- * Composition (per `docs/specs/mobile-cloud-claude-prompts.md` C-1):
+ * Composition:
  *   - HERO — the next dated upcoming show (ticketed or watching) gets
  *     a full-bleed image treatment via `HeroShowCard`. Today's ticketed
  *     show wins when present.

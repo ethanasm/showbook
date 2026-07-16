@@ -1,8 +1,8 @@
 /**
  * First-run step 5 of 5 — Gmail import (informational).
  *
- * Mobile Gmail OAuth scope-elevation isn't built yet (tracked in
- * docs/specs/planned-improvements.md). To avoid teasing a feature
+ * Mobile Gmail OAuth scope-elevation isn't built yet (tracked in the
+ * knowledge-vault backlog). To avoid teasing a feature
  * the user can't actually use, both CTAs simply mark first-run
  * complete and route into the main app — the illustration + body
  * still teach what the Gmail scan does on the web.
