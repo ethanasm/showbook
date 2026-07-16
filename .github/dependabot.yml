@@ -106,6 +106,15 @@ updates:
       # packages ship ESLint-10-compatible releases.
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
+      # TypeScript 7 (the native compiler) is incompatible with the current
+      # toolchain on three fronts (#674): typescript-eslint 8.x peers cap at
+      # typescript <6.1.0, `next build`'s type-check worker crashes under it
+      # ("The \"id\" argument must be of type string"), and Expo's
+      # @expo/require-utils peers cap at ^6. Re-enable once eslint-config-next
+      # / typescript-eslint / Expo all ship TS-7-compatible releases and the
+      # upgrade can land as one verified change.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
       # Babel 8 is dead-on-arrival for the Expo SDK 56 / React Native 0.85
       # toolchain: babel-preset-expo, @babel/preset-typescript, and the
       # react-native-worklets babel plugin all `assertVersion("^7.0.0-0")`,
