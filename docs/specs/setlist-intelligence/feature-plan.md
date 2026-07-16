@@ -1169,8 +1169,9 @@ accessed from the Me tab. Three-pane layout:
 This is exactly the kind of "lots of rows wants a wide table" view
 the prompt called out. On phone it'd be cramped; on iPad it's a
 power-user dream. Implementation reuses `ThreePaneLayout`
-parameterized via context, the same way Imports does in
-`feature-plan-personal-data-import.md` §12d.
+parameterized via context, the same way Imports does in the
+personal-data-import plan §12d (knowledge vault:
+`brain/projects/showbook/plans/feature-personal-data-import.md`).
 
 ### 12h. Visual / design updates
 
@@ -1451,7 +1452,7 @@ and `GET /me/player/currently-playing` (real-time).
 #### What it unlocks
 
 - **Personal-data-import "Spotify peaks" enhancement** — already in
-  `feature-plan-personal-data-import.md` §7. Rolling recently-played
+  the personal-data-import plan §7 (knowledge vault). Rolling recently-played
   is the API path; the Takeout extended-history is the historical
   path. Same logic, two windows.
 - **Live mode setlist capture** (mobile only): when the user opens

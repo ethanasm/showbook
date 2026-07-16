@@ -6,11 +6,10 @@ conventions; this file covers what's specific to the mobile app.
 
 ## Status
 
-The app is feature-complete against the design handoff. See
-[`docs/specs/mobile-roadmap.md`](../../docs/specs/mobile-roadmap.md)
-for the build plan and
-[`docs/specs/planned-improvements.md`](../../docs/specs/planned-improvements.md)
-for outstanding follow-ups (push notifications wiring + the smaller
+The app is feature-complete against the design handoff. The build
+plan (`mobile-build.md`) and the planned-improvements backlog both
+live in the knowledge vault (`brain/projects/showbook/plans/`) —
+see the backlog for outstanding follow-ups (push notifications wiring + the smaller
 remaining items called out in the post-M5 audit, which has otherwise
 been fully addressed).
 
@@ -325,5 +324,5 @@ fast; let Maestro be the gate.
 - **Push notifications are not yet delivered.** The toggle in
   Preferences and the client-side permission prompt exist; the
   server side (Expo push token persistence + digest emission +
-  deep-link routing) is the open follow-up tracked in
-  `docs/specs/planned-improvements.md`.
+  deep-link routing) is the open follow-up tracked in the knowledge
+  vault backlog (`brain/projects/showbook/plans/planned-improvements.md`).

@@ -576,7 +576,8 @@ review gates:
   build (see the checklist) or it renders blank.
 - **Known beta caveat — push notifications.** The Preferences push toggle
   and the permission prompt are live, but server-side delivery isn't wired
-  yet (`docs/specs/planned-improvements.md`). Testers can flip the toggle
+  yet (tracked in the knowledge vault backlog,
+  `brain/projects/showbook/plans/planned-improvements.md`). Testers can flip the toggle
   and will never receive a push — call this out in your beta notes, or hide
   the toggle for the beta build.
 

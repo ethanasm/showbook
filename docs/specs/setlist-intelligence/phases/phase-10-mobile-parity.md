@@ -199,9 +199,8 @@ specific log context: `child({ component: 'mobile.predicted-setlist' })`.
    register a `showbook://spotify-connected` URL scheme, redirect
    to it from the callback for in-app-browser User-Agents, and
    pass that scheme as the `redirectUrl` to
-   `WebBrowser.openAuthSessionAsync`. See
-   [`../plan-review.md`](../plan-review.md) SI-08 for the full
-   rationale.
+   `WebBrowser.openAuthSessionAsync`. See SI-08 in the plan review
+   (knowledge vault) for the full rationale.
 
 ---
 

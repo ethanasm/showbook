@@ -313,8 +313,9 @@ Google Places) doesn't include Spotify, and there's no
 Phase 0 mobile entry point that calls `requireConnection`. The
 first mobile UX that exercises this infrastructure is the Hype
 playlist button on Show detail, which lands in Phase 10. SI-08
-gets validated there instead — see
-[`../plan-review.md`](../plan-review.md) SI-08.)
+gets validated there instead — see SI-08 in the plan review, now in
+the knowledge vault:
+`brain/projects/showbook/reviews/2026-05-09-setlist-intelligence-plan-review.md`.)
 
 ### Audio-features probe (runbook) — **RESOLVED 2026-05-17: 403, Phase 8 deferred to v2**
 

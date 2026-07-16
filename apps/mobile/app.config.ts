@@ -156,7 +156,8 @@ const config: ExpoConfig = {
       // Showbook can open. Adds Showbook to the iOS share sheet for
       // pkpass files; LSHandlerRank=Alternate keeps the system Wallet
       // app as the default opener so a tap on a pass still adds it to
-      // Wallet by default. See docs/specs/feature-plan-ios-wallet-import.md.
+      // Wallet by default. Groundwork for a future share-sheet .pkpass
+      // import (plan lives in the knowledge vault).
       CFBundleDocumentTypes: [
         {
           CFBundleTypeName: 'Apple Wallet Pass',
