@@ -30,7 +30,7 @@
     "@showbook/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
     "@trpc/client": "^11.17.0",
-    "@trpc/react-query": "^11.17.0",
+    "@trpc/react-query": "^11.18.0",
     "@trpc/server": "^11.0.0",
     "drizzle-orm": "^0.45.2",
     "geist": "^1.7.2",
