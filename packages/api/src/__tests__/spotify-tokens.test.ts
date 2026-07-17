@@ -100,6 +100,25 @@ mock.module('@showbook/db', {
   namedExports: { ...realDb, db: fakeDb },
 });
 
+// Hoisted so tests can throw the exact class the mocked module exports.
+// Never re-import the mock through a different specifier ('../spotify' vs
+// '../spotify.js') to get at this class: whether those two specifiers hit
+// the same mock registration depends on the loader's resolution
+// normalization, and a mismatch hands the test a different SpotifyError
+// identity than the module under test sees — `instanceof` then fails and
+// the 401 path stops being recognized (exactly how this file broke in CI
+// while passing locally).
+class MockSpotifyError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public detail?: string,
+  ) {
+    super(message);
+    this.name = 'SpotifyError';
+  }
+}
+
 mock.module('../spotify.js', {
   namedExports: {
     refreshSpotifyToken: async (refreshToken: string) =>
@@ -112,16 +131,7 @@ mock.module('../spotify.js', {
             scope: 'user-follow-read',
             tokenType: 'Bearer',
           },
-    SpotifyError: class SpotifyError extends Error {
-      constructor(
-        message: string,
-        public status: number,
-        public detail?: string,
-      ) {
-        super(message);
-        this.name = 'SpotifyError';
-      }
-    },
+    SpotifyError: MockSpotifyError,
   },
 });
 
@@ -215,17 +225,12 @@ describe('ensureFreshUserToken', () => {
   });
 
   it('marks the row revoked and returns null on Spotify 401', async () => {
-    // Need to import the SpotifyError class through the mocked module so
-    // `instanceof` matches.
-    const spotifyMod = await import('../spotify');
-    const SpotifyError = spotifyMod.SpotifyError;
-
     const row = tokenRow({
       expiresAt: new Date(Date.now() + 30 * 1000),
     });
     SCRIPT.selectResults = [[row]];
     SCRIPT.refreshHandler = async () => {
-      throw new SpotifyError('unauthorized', 401, 'token revoked');
+      throw new MockSpotifyError('unauthorized', 401, 'token revoked');
     };
     const result = await mod.ensureFreshUserToken('user-1');
     assert.equal(result, null);
