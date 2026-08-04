@@ -11,7 +11,7 @@
     "lint": "eslint --no-config-lookup -c ../../eslint.config.packages.mjs src"
   },
   "dependencies": {
-    "@axiomhq/pino": "^1.7.0",
+    "@axiomhq/pino": "^1.8.0",
     "langfuse": "^3.38.4",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3"
