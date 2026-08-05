@@ -87,10 +87,18 @@ skip_step() {
 # SDK bump dropping StyleSheet.absoluteFillObject, a package type regression —
 # slips straight through build / lint / unit. Likewise Lint now gates the
 # mobile app and the libraries, not just web.
+#
+# Audit gates the *production* dependency tree. It is a real step, not advisory:
+# between the 2026-06-13 and 2026-08-05 security reviews the `--prod` advisory
+# count went from 2 (dev tooling only) to 22 (3 critical / 11 high, several in
+# the live request path) with nothing failing, because no gate looked. A
+# transitive advisory that can't be bumped away belongs in the `pnpm.overrides`
+# block in package.json, so the exception is recorded rather than tolerated.
 run_step "Build"      build      pnpm build
 run_step "Lint"       lint       pnpm lint
 run_step "Typecheck"  typecheck  pnpm typecheck
 run_step "Unit tests" unit-tests pnpm exec nx run-many -t test
+run_step "Audit"      audit      pnpm audit --prod
 
 if [ "$RUN_E2E" = "1" ]; then
   if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^showbook-dev-db$'; then
