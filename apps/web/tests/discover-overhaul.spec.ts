@@ -27,8 +27,11 @@ test.describe('Discover overhaul', () => {
     await page.goto('/discover');
     await page.waitForLoadState('networkidle');
 
-    // The Hamilton run seed: starts 2026-08-01, ends 2026-10-29 (90 days from Aug 1).
-    // Date range should appear in some form like "Aug 1 – Oct 29" and the dates count "90 dates".
+    // The Hamilton run seed is a 90-night run anchored to today, starting 3
+    // days ago — so it is deliberately *in progress*: its first night has
+    // passed but 87 performances remain. The feed must still show it (the
+    // filter ORs runEndDate with showDate); a feed that keyed on showDate alone
+    // dropped in-progress runs entirely.
     await expect(page.locator('body')).toContainText('Hamilton');
     await expect(page.locator('body')).toContainText(/90 dates/i);
 
