@@ -66,6 +66,32 @@ function cursorCondition(cursor: { showDate: string; id: string }) {
   )!;
 }
 
+/**
+ * An announcement is still worth showing while *any* of its performances is
+ * yet to happen.
+ *
+ * `showDate` is the run's FIRST night, so filtering on it alone drops an
+ * in-progress multi-night run the day after it opens: a 90-night Hamilton run
+ * appeared on night 1 and vanished on night 2 with 88 performances still to
+ * come. `runEndDate` is the last night (equal to `showDate` for single-night
+ * announcements), so OR-ing the two keeps in-progress runs visible while still
+ * hiding genuinely finished ones.
+ *
+ * `runEndDate` is nullable. For those rows the second clause evaluates to NULL,
+ * and `FALSE OR NULL` is NULL — filtered out — so single-night behaviour is
+ * unchanged.
+ *
+ * The digest feed already did this (with the same rationale in a comment); the
+ * followed-venues / artists / regions / near-you feeds did not. Sharing one
+ * predicate keeps them from drifting apart again.
+ */
+function stillUpcoming(): SQL {
+  return or(
+    sql`${announcements.showDate} >= CURRENT_DATE`,
+    sql`${announcements.runEndDate} >= CURRENT_DATE`,
+  )!;
+}
+
 // ---------------------------------------------------------------------------
 // Discover Router
 // ---------------------------------------------------------------------------
@@ -96,7 +122,7 @@ export const discoverRouter = router({
       // Build conditions
       const conditions: SQL[] = [
         inArray(announcements.venueId, venueIds),
-        sql`${announcements.showDate} >= CURRENT_DATE`,
+        stillUpcoming(),
       ];
       const decoded = decodeCursor(cursor);
       if (decoded) {
@@ -176,10 +202,7 @@ export const discoverRouter = router({
           // Keep active multi-night runs whose first night has passed but
           // whose run is still ongoing; otherwise hide shows that turned past
           // between digest runs.
-          or(
-            sql`${announcements.showDate} >= CURRENT_DATE`,
-            sql`${announcements.runEndDate} >= CURRENT_DATE`,
-          ),
+          stillUpcoming(),
         ),
       )
       .orderBy(asc(userDigestEntries.position));
@@ -242,7 +265,7 @@ export const discoverRouter = router({
       )!;
       const conditions: SQL[] = [
         followedMatch,
-        sql`${announcements.showDate} >= CURRENT_DATE`,
+        stillUpcoming(),
       ];
       const decoded = decodeCursor(cursor);
       if (decoded) {
@@ -351,7 +374,7 @@ export const discoverRouter = router({
       );
 
       const conditions: SQL[] = [
-        sql`${announcements.showDate} >= CURRENT_DATE`,
+        stillUpcoming(),
         or(...regionClauses)!,
       ];
       if (followedVenueIds.length > 0) {
@@ -545,7 +568,7 @@ export const discoverRouter = router({
       .innerJoin(venues, eq(announcements.venueId, venues.id))
       .where(
         and(
-          sql`${announcements.showDate} >= CURRENT_DATE`,
+          stillUpcoming(),
           or(...sourceClauses)!,
         ),
       )
