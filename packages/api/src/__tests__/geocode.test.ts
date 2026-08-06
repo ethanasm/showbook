@@ -6,7 +6,7 @@
 
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { geocodeVenue } from '../geocode';
+import { geocodeVenue, resetGeocodeRouter } from '../geocode';
 
 const ORIGINAL_FETCH = globalThis.fetch;
 const ORIGINAL_KEY = process.env.GOOGLE_PLACES_API_KEY;
@@ -26,6 +26,10 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 }
 
 beforeEach(() => {
+  // The router is module-level so its breaker cooldowns and Nominatim pacing
+  // survive across calls — which means they'd survive across tests too, and a
+  // test that trips the circuit would silently skip Google in the next one.
+  resetGeocodeRouter();
   // Default: no Google key — geocodeVenue's first try{} short-circuits to []
   // from autocomplete and we drop straight to Nominatim.
   delete process.env.GOOGLE_PLACES_API_KEY;
@@ -253,4 +257,73 @@ test('geocodeVenue: returns null when all queries throw', async () => {
   });
   const result = await geocodeVenue('X', 'Y');
   assert.equal(result, null);
+});
+
+// ── Routing behaviour (provider-router) ───────────────────────────────
+
+test('a repeatedly failing Google stops being called and Nominatim serves', async () => {
+  // The breaker is the point of routing rather than a hand-rolled try/catch:
+  // once Google has failed enough times, we stop paying for the call at all.
+  process.env.GOOGLE_PLACES_API_KEY = 'test-key';
+  let googleCalls = 0;
+
+  stubFetch(async (input) => {
+    // Match the host exactly rather than by substring: `places.googleapis.com`
+    // can appear anywhere in a URL (a path, a query parameter), so `includes`
+    // would route a Nominatim call to the Google branch given the right input.
+    const host = new URL(String(input)).hostname;
+    if (host === 'places.googleapis.com') {
+      googleCalls += 1;
+      return jsonResponse({ error: 'boom' }, { status: 500 });
+    }
+    return jsonResponse([{ lat: '51.5', lon: '-0.1', address: { country: 'UK' } }]);
+  });
+
+  for (let i = 0; i < 5; i += 1) {
+    const result = await geocodeVenue(`Venue ${i}`, 'London');
+    assert.equal(result?.lat, 51.5, 'Nominatim keeps answering throughout');
+    assert.equal(result?.googlePlaceId, undefined, 'and without a Place ID');
+  }
+
+  assert.ok(
+    googleCalls < 5,
+    `expected the circuit to open and skip Google, but it was called ${googleCalls} times`,
+  );
+});
+
+test('a Nominatim 429 with Retry-After opens the circuit immediately', async () => {
+  // The header is believed on the first refusal rather than after three —
+  // this is a public endpoint with a usage policy, and it just told us to stop.
+  let nominatimCalls = 0;
+  stubFetch(async () => {
+    nominatimCalls += 1;
+    return jsonResponse(
+      { error: 'rate limited' },
+      { status: 429, headers: { 'Retry-After': '120' } },
+    );
+  });
+
+  assert.equal(await geocodeVenue('The Fillmore', 'San Francisco'), null);
+  const firstRound = nominatimCalls;
+  assert.ok(firstRound > 0);
+
+  assert.equal(await geocodeVenue('Great American', 'San Francisco'), null);
+  assert.equal(nominatimCalls, firstRound, 'second call skipped — circuit is open');
+});
+
+test('resetGeocodeRouter clears breaker state', async () => {
+  let calls = 0;
+  stubFetch(async () => {
+    calls += 1;
+    return jsonResponse({ error: 'nope' }, { status: 429, headers: { 'Retry-After': '300' } });
+  });
+
+  await geocodeVenue('A', 'B');
+  const afterOpen = calls;
+  await geocodeVenue('C', 'D');
+  assert.equal(calls, afterOpen, 'circuit open');
+
+  resetGeocodeRouter();
+  await geocodeVenue('E', 'F');
+  assert.ok(calls > afterOpen, 'reset re-enables the provider');
 });

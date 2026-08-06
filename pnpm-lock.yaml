@@ -426,6 +426,9 @@ importers:
       pg-boss:
         specifier: ^12.25.1
         version: 12.25.1
+      provider-router:
+        specifier: 0.1.0
+        version: 0.1.0
       superjson:
         specifier: ^2.2.6
         version: 2.2.6
@@ -5883,6 +5886,10 @@ packages:
 
   prop-types@15.8.1:
     resolution: {integrity: sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==}
+
+  provider-router@0.1.0:
+    resolution: {integrity: sha512-T8mJQePgFGtya7g3TF0CdWFnyjMmabJNTeYQK6QKL8eV20YUtmQ14AiOycJOOKyBa8gLVw4mWXYNqjVux9TNlg==}
+    engines: {node: '>=20'}
 
   proxy-from-env@2.1.0:
     resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
@@ -12990,6 +12997,8 @@ snapshots:
       loose-envify: 1.4.0
       object-assign: 4.1.1
       react-is: 16.13.1
+
+  provider-router@0.1.0: {}
 
   proxy-from-env@2.1.0: {}
 
