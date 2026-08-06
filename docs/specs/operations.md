@@ -305,27 +305,39 @@ distribute, the read-only guarantee enforced by the engine here rather
 than by the client, and every query it runs lands in Axiom as
 `admin.sql.query`.
 
-```jsonc
-// .mcp.json — the token comes from the environment, never the repo
-{
-  "mcpServers": {
-    "queue-doctor": {
-      "command": "npx",
-      "args": ["-y", "mcp-queue-doctor"],
-      "env": {
-        "QUEUE_DOCTOR_HTTP_SQL_URL": "${ADMIN_QUERY_URL}/api/admin/sql",
-        "QUEUE_DOCTOR_HTTP_SQL_TOKEN": "${ADMIN_QUERY_TOKEN}"
-      }
-    }
-  }
-}
+**It is already wired up.** The repo-root `.mcp.json` declares the
+server, and `enableAllProjectMcpServers` in `.claude/settings.json` lets
+it start without an interactive trust prompt (a cloud session has nobody
+to answer one). The config carries no secret — it reads
+`${ADMIN_QUERY_URL}` and `${ADMIN_QUERY_TOKEN}` from the session
+environment, the same two variables `pnpm prod:query` uses.
+
+So the setup is just exporting those two, exactly as for `prod:query`:
+
+```bash
+export ADMIN_QUERY_URL=https://<prod-host>
+export ADMIN_QUERY_TOKEN=<value-from-.env.prod>
 ```
 
-Then ask it "is anything wrong with the queue?". Two limits are worth
-knowing, because they are this endpoint's and not the tool's: the 3s
-`statement_timeout` overrides whatever `QUEUE_DOCTOR_STATEMENT_TIMEOUT_MS`
-says, and one `diagnose` costs roughly a dozen requests against the
-30/60s rate limit — so a few in a row will start returning 429.
+Then ask it "is anything wrong with the queue?".
+
+Four things worth knowing:
+
+- **The version is pinned** (`mcp-queue-doctor@0.2.0`). The HTTP transport
+  landed in 0.2.0; 0.1.0 has no such thing and would fail at startup
+  demanding a `DATABASE_URL`. Pinning also means a future release can't
+  silently change what runs against prod.
+- **The endpoint's limits win, not the tool's.** The 3s
+  `statement_timeout` and 1000-row cap here override
+  `QUEUE_DOCTOR_STATEMENT_TIMEOUT_MS` / `QUEUE_DOCTOR_MAX_ROWS`.
+- **One `diagnose` is roughly a dozen requests** against the 30/60s rate
+  limit, so a few in a row start returning 429. The tool surfaces the
+  `retry-after` rather than failing opaquely.
+- **`ADMIN_QUERY_URL` is not namespaced per project.** Other repos in a
+  shared workspace use the same variable name, so a session that has one
+  of theirs exported will point the queue doctor at the wrong host — it
+  shows up as a 404 from a URL you didn't expect. Check the value before
+  believing a strange result.
 
 ### Restricting the endpoint to a dedicated read-only role (recommended)
 
