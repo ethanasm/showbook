@@ -403,8 +403,8 @@ importers:
         specifier: ^3.1089.0
         version: 3.1089.0
       '@ethanasm/mcp-budget-governor':
-        specifier: git+https://github.com/ethanasm/mcp-budget-governor.git#34207932a16890316486604118b1cfb605ef08b1&path:ts
-        version: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/34207932a16890316486604118b1cfb605ef08b1#path:ts
+        specifier: git+https://github.com/ethanasm/mcp-budget-governor.git#3d6db38ddb2428009996f187b4edd47d4c23b6af&path:ts
+        version: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts
       '@showbook/db':
         specifier: workspace:*
         version: link:../db
@@ -1449,8 +1449,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@ethanasm/mcp-budget-governor@https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/34207932a16890316486604118b1cfb605ef08b1#path:ts':
-    resolution: {gitHosted: true, integrity: sha512-NsbW4FviZjpC02uz4Li4bTOmSvTZNOFcj7s/geS+vzFEKYidozDwI3dlFA+NoxvGPd9l965K0kthiqXCNT9s8Q==, tarball: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/34207932a16890316486604118b1cfb605ef08b1}
+  '@ethanasm/mcp-budget-governor@https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts':
+    resolution: {gitHosted: true, integrity: sha512-kHKtrcbIGDifPIebNlRVWR+/bPkcMqXzgSUzf1sPeThKOclf9GAhvjdk4KbcNNRn+nzojvsoEAzpf0TZyaS9cw==, tarball: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af}
     version: 0.1.0
     engines: {node: '>=20'}
 
@@ -7875,7 +7875,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@ethanasm/mcp-budget-governor@https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/34207932a16890316486604118b1cfb605ef08b1#path:ts': {}
+  '@ethanasm/mcp-budget-governor@https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts': {}
 
   '@exodus/bytes@1.15.0': {}
 
@@ -9051,9 +9051,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
