@@ -10,6 +10,13 @@
  *   Authorization: Bearer <ADMIN_QUERY_TOKEN>
  *   Content-Type: application/json
  *   { "query": "SELECT count(*) FROM shows" }
+ *   { "query": "SELECT * FROM shows WHERE id = $1", "params": ["abc"] }
+ *
+ * `params` is optional and binds `$1`-style placeholders. It exists so
+ * programmatic clients (mcp-queue-doctor talks to this endpoint instead of
+ * requiring a Postgres route into the box) don't have to inline their own
+ * literals to use it. Only JSON scalars are accepted — see
+ * `validateAdminParams` in lib/admin-query.ts.
  *
  * Response 200:
  *   {
@@ -46,7 +53,7 @@ import { timingSafeEqual } from 'node:crypto';
 import postgres from 'postgres';
 import { child } from '@showbook/observability';
 import { isRateLimited } from '@showbook/api';
-import { validateAdminQuery } from '@/lib/admin-query';
+import { validateAdminParams, validateAdminQuery } from '@/lib/admin-query';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,6 +161,7 @@ export async function POST(req: Request) {
 
   // 3. Parse + validate request body.
   let rawQuery: unknown;
+  let rawParams: unknown;
   try {
     const body = (await req.json()) as Record<string, unknown> | null;
     if (!body || typeof body !== 'object') {
@@ -163,6 +171,7 @@ export async function POST(req: Request) {
       );
     }
     rawQuery = body.query;
+    rawParams = body.params;
   } catch {
     return NextResponse.json(
       { error: 'bad_request', details: 'invalid JSON body' },
@@ -178,6 +187,14 @@ export async function POST(req: Request) {
     );
   }
 
+  const paramsValidation = validateAdminParams(rawParams);
+  if (!paramsValidation.ok) {
+    return NextResponse.json(
+      { error: 'query_rejected', details: paramsValidation.reason },
+      { status: 422 },
+    );
+  }
+
   // 4. Run the query inside a READ ONLY transaction with a statement
   //    timeout. postgres-js's `.begin('READ ONLY', cb)` opens a
   //    transaction with that mode flag; any write attempt errors with
@@ -189,7 +206,9 @@ export async function POST(req: Request) {
     rows = (await sql.begin('READ ONLY', async (tx) => {
       await tx.unsafe(`SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT_MS}`);
       // postgres-js returns row arrays from .unsafe; cast to a plain array.
-      const result = await tx.unsafe(validation.query);
+      // Passing params here (rather than letting a caller inline literals)
+      // means bound values are never parsed as part of the statement.
+      const result = await tx.unsafe(validation.query, paramsValidation.params);
       return result as unknown as unknown[];
     })) as unknown as unknown[];
   } catch (err) {

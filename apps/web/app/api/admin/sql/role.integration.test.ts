@@ -132,3 +132,65 @@ describe('admin/sql showbook_query role', { skip: !HAS_DB }, () => {
     );
   });
 });
+
+/**
+ * The route binds `params` through `tx.unsafe(query, params)` inside a
+ * `BEGIN READ ONLY` transaction. Unit tests can prove the validator accepts
+ * the right shapes, but only a real connection proves the binding actually
+ * happens — that `$1` becomes a bound value rather than reaching the parser,
+ * and that it still works inside the read-only transaction the route opens.
+ */
+describe('admin/sql bind parameters', { skip: !HAS_DB }, () => {
+  let client: ReturnType<typeof postgres> | null = null;
+
+  before(() => {
+    client = postgres(process.env.DATABASE_URL!, { max: 1, idle_timeout: 5 });
+  });
+
+  after(async () => {
+    await withTimeout(10_000, async () => {
+      if (client) await client.end({ timeout: 5 });
+    });
+  });
+
+  it('binds parameters inside the read-only transaction', async () => {
+    const rows = await client!.begin('READ ONLY', async (tx) => {
+      const result = await tx.unsafe(
+        'select $1::text as name, $2::int as n, $3::bool as flag',
+        ['pgboss', 42, true],
+      );
+      return result as unknown as Array<Record<string, unknown>>;
+    });
+
+    assert.deepEqual(rows[0], { name: 'pgboss', n: 42, flag: true });
+  });
+
+  it('treats a parameter as a value, never as SQL', async () => {
+    // If this were interpolated rather than bound, the statement would error
+    // or return something other than the literal string.
+    const injection = "'; drop table users; --";
+    const rows = await client!.begin('READ ONLY', async (tx) => {
+      const result = await tx.unsafe('select $1::text as echoed', [injection]);
+      return result as unknown as Array<Record<string, unknown>>;
+    });
+
+    assert.equal(rows[0]?.echoed, injection);
+  });
+
+  it('still refuses writes when parameters are supplied', async () => {
+    await assert.rejects(
+      () =>
+        client!.begin('READ ONLY', async (tx) => {
+          await tx.unsafe('insert into users (id, email) values ($1, $2)', [
+            'x',
+            'y@example.com',
+          ]);
+        }),
+      (err: unknown) => {
+        // 25006 read_only_sql_transaction — the engine, not our validator.
+        assert.equal((err as { code?: string }).code, '25006');
+        return true;
+      },
+    );
+  });
+});

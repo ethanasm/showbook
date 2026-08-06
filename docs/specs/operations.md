@@ -249,9 +249,22 @@ read-only HTTPS endpoint described here.
 
 `POST /api/admin/sql` accepts a single `SELECT` / `EXPLAIN` / `WITH` /
 `SHOW` / `TABLE` / `VALUES` statement, runs it inside a `BEGIN READ
-ONLY` transaction with a 5s `statement_timeout`, and returns up to 1000
+ONLY` transaction with a 3s `statement_timeout`, and returns up to 1000
 rows as JSON. Bearer-auth'd via `ADMIN_QUERY_TOKEN`. Disabled (401)
-when the token is unset or shorter than 32 chars.
+when the token is unset or shorter than 32 chars. Rate-limited per
+client IP at 30 requests / 60s.
+
+The body is `{ "query": "..." }`, optionally with `params` binding
+`$1`-style placeholders:
+
+```json
+{ "query": "select * from shows where id = $1", "params": ["abc"] }
+```
+
+`params` accepts up to 32 JSON scalars (string / number / boolean /
+null); objects and arrays are refused with 422. It exists so
+programmatic clients don't have to inline their own literals to use the
+endpoint — see "Pointing mcp-queue-doctor at prod" below.
 
 ```bash
 # One-time: generate the token and add to .env.prod, then restart prod web.
@@ -268,6 +281,43 @@ echo "select * from users limit 5" | pnpm prod:query
 
 Writes are blocked at the Postgres engine — the `READ ONLY` transaction
 errors any INSERT/UPDATE/DELETE/DDL with SQLSTATE `25006`.
+
+### Pointing mcp-queue-doctor at prod
+
+[`mcp-queue-doctor`](https://github.com/ethanasm/mcp-queue-doctor) is an
+MCP server that diagnoses the pg-boss queue — retry storms, stuck jobs,
+missed schedules, duplicate registrations. Its heuristics were extracted
+from `packages/jobs/src/health-check/checks.ts`, so it answers the same
+questions the morning health-check email does, on demand.
+
+It normally connects straight to Postgres, which a machine outside the
+prod host can't do. Instead it can run its SQL through this endpoint,
+which is why `params` exists: no port to open, no database credential to
+distribute, the read-only guarantee enforced by the engine here rather
+than by the client, and every query it runs lands in Axiom as
+`admin.sql.query`.
+
+```jsonc
+// .mcp.json — the token comes from the environment, never the repo
+{
+  "mcpServers": {
+    "queue-doctor": {
+      "command": "npx",
+      "args": ["-y", "mcp-queue-doctor"],
+      "env": {
+        "QUEUE_DOCTOR_HTTP_SQL_URL": "${ADMIN_QUERY_URL}/api/admin/sql",
+        "QUEUE_DOCTOR_HTTP_SQL_TOKEN": "${ADMIN_QUERY_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Then ask it "is anything wrong with the queue?". Two limits are worth
+knowing, because they are this endpoint's and not the tool's: the 3s
+`statement_timeout` overrides whatever `QUEUE_DOCTOR_STATEMENT_TIMEOUT_MS`
+says, and one `diagnose` costs roughly a dozen requests against the
+30/60s rate limit — so a few in a row will start returning 429.
 
 ### Restricting the endpoint to a dedicated read-only role (recommended)
 

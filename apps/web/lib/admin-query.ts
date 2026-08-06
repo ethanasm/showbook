@@ -22,6 +22,14 @@
 
 export const MAX_QUERY_LENGTH = 10_000;
 
+/**
+ * Bind parameters are for diagnostic SELECTs — queue names, row limits, time
+ * windows. A dozen is already generous; the cap exists so a caller can't hand
+ * Postgres an enormous parameter list to plan around.
+ */
+export const MAX_PARAMS = 32;
+export const MAX_PARAM_LENGTH = 10_000;
+
 const ALLOWED_VERBS = new Set([
   'SELECT',
   'EXPLAIN',
@@ -34,6 +42,69 @@ const ALLOWED_VERBS = new Set([
 export type ValidationResult =
   | { ok: true; query: string }
   | { ok: false; reason: string };
+
+/** A value that can safely be bound to a placeholder. */
+export type AdminQueryParam = string | number | boolean | null;
+
+export type ParamsValidationResult =
+  | { ok: true; params: AdminQueryParam[] }
+  | { ok: false; reason: string };
+
+/**
+ * Validate the optional `params` array that accompanies a query.
+ *
+ * Bind parameters are what make this endpoint usable by a *program* rather
+ * than only by a human pasting SQL — a client that has to inline its own
+ * literals to reach this endpoint would be building an injection sink for no
+ * reason. Passing them through to Postgres as parameters keeps values out of
+ * the parsed statement entirely.
+ *
+ * Only JSON scalars are accepted. Objects and arrays would reach postgres-js
+ * as json / array types, which no diagnostic query here needs, and a narrow
+ * contract is easy to widen later — the reverse is not.
+ */
+export function validateAdminParams(input: unknown): ParamsValidationResult {
+  if (input === undefined || input === null) return { ok: true, params: [] };
+
+  if (!Array.isArray(input)) {
+    return { ok: false, reason: 'params must be an array' };
+  }
+  if (input.length > MAX_PARAMS) {
+    return { ok: false, reason: `too many params (max ${MAX_PARAMS})` };
+  }
+
+  const params: AdminQueryParam[] = [];
+  for (let i = 0; i < input.length; i++) {
+    const value: unknown = input[i];
+    if (value === null || typeof value === 'boolean') {
+      params.push(value);
+      continue;
+    }
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) {
+        return { ok: false, reason: `params[${i}] must be a finite number` };
+      }
+      params.push(value);
+      continue;
+    }
+    if (typeof value === 'string') {
+      if (value.length > MAX_PARAM_LENGTH) {
+        return {
+          ok: false,
+          reason: `params[${i}] too long (max ${MAX_PARAM_LENGTH} chars)`,
+        };
+      }
+      params.push(value);
+      continue;
+    }
+    return {
+      ok: false,
+      reason: `params[${i}] must be a string, number, boolean, or null`,
+    };
+  }
+
+  return { ok: true, params };
+}
 
 /**
  * Strip leading SQL comments and whitespace so we can find the first verb.
