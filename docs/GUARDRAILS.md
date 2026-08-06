@@ -16,12 +16,22 @@ lives in two tiers:
   already shows the shape.)
 - **The money tier** — the per-user daily LLM quota, the hourly bulk-scan
   quota, the deployment-wide daily LLM **spend** ceiling, and the global
-  iTunes lookup guard — is backed by `mcp-budget-governor` over
+  iTunes lookup guard — is backed by
+  [`mcp-budget-governor`](https://www.npmjs.com/package/mcp-budget-governor)
+  ([source](https://github.com/ethanasm/mcp-budget-governor)) over
   **Postgres** (`packages/api/src/budget.ts`; counters in `mcpbg_counters`,
   schema auto-created at first use the way pg-boss owns its schema). These
   survive restarts: a redeploy no longer hands every user a fresh 50-call
   LLM day. Without `DATABASE_URL` (unit tests, offline dev) the same layer
   runs on an in-process backend.
+
+  The library was extracted from vacation-price-tracker's rate limiter and
+  ships as two packages — npm and PyPI — over one shared contract, so the
+  counters here use the same key scheme and the same atomic operations that
+  project's Python API uses. Its Postgres backend exists because of this
+  adoption: showbook has no Redis, and the key scheme made a Postgres
+  implementation viable (every key carries a UTC bucket, so a new window is a
+  new row and expiry is garbage collection rather than correctness).
 
 The daily **spend** ceiling is the one limit denominated in dollars:
 every Groq call is priced (tokens × Groq's per-Mtok rates) and metered
