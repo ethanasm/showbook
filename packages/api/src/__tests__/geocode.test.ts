@@ -268,8 +268,11 @@ test('a repeatedly failing Google stops being called and Nominatim serves', asyn
   let googleCalls = 0;
 
   stubFetch(async (input) => {
-    const url = String(input);
-    if (url.includes('places.googleapis.com')) {
+    // Match the host exactly rather than by substring: `places.googleapis.com`
+    // can appear anywhere in a URL (a path, a query parameter), so `includes`
+    // would route a Nominatim call to the Google branch given the right input.
+    const host = new URL(String(input)).hostname;
+    if (host === 'places.googleapis.com') {
       googleCalls += 1;
       return jsonResponse({ error: 'boom' }, { status: 500 });
     }
