@@ -1,6 +1,20 @@
-import { enforceRateLimit } from './rate-limit';
+/**
+ * LLM quota knobs and enforcement.
+ *
+ * The enforcement moved to the durable budget layer (`budget.ts`, backed by
+ * `@ethanasm/mcp-budget-governor` over Postgres): the daily quota now survives
+ * redeploys — previously the in-process Map reset to zero and handed every user
+ * a fresh 50-call day — and `enforceLLMQuota` also checks the deployment-wide
+ * daily *spend* ceiling, so job-free traffic can't run the operator's bill past
+ * `SHOWBOOK_LLM_DAILY_BUDGET_USD` no matter how many users stay under their
+ * individual caps.
+ *
+ * The env-knob readers keep their names and defaults; the enforcement
+ * functions are now async (they hit Postgres) and still throw
+ * `TRPCError(TOO_MANY_REQUESTS)`.
+ */
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { enforceBulkScanQuota, enforceLLMBudget, enforceLLMCallQuota } from './budget';
 
 function readPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -21,16 +35,17 @@ export function bulkScanMessageCap(): number {
   return readPositiveInt('SHOWBOOK_BULK_SCAN_MESSAGE_CAP', 200);
 }
 
-export function enforceLLMQuota(userId: string): void {
-  enforceRateLimit(`llm:${userId}`, {
-    max: llmDailyQuota(),
-    windowMs: DAY_MS,
-  });
+/**
+ * Admit one user-initiated LLM call: the caller's daily quota, then the global
+ * spend breaker. Order matters — the per-user check is gated (a refused call is
+ * not charged), so checking it first means a user at their cap doesn't hit the
+ * budget gate at all.
+ */
+export async function enforceLLMQuota(userId: string): Promise<void> {
+  await enforceLLMCallQuota(userId, llmDailyQuota());
+  await enforceLLMBudget();
 }
 
-export function enforceBulkScanRateLimit(userId: string): void {
-  enforceRateLimit(`bulk-scan:${userId}`, {
-    max: bulkScanHourlyQuota(),
-    windowMs: 60 * 60 * 1000,
-  });
+export async function enforceBulkScanRateLimit(userId: string): Promise<void> {
+  await enforceBulkScanQuota(userId, bulkScanHourlyQuota());
 }

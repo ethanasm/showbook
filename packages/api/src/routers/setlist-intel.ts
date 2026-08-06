@@ -97,7 +97,8 @@ import {
 } from '../spotify';
 import { ITunesError, searchTrackPreview as searchITunesPreview } from '../itunes';
 import { diffSpotifyFollows } from '../spotify-follows-diff';
-import { enforceRateLimit, isRateLimited } from '../rate-limit';
+import { enforceRateLimit } from '../rate-limit';
+import { isItunesLookupLimited } from '../budget';
 import { resolvePersonalChips } from '../personal-chips';
 
 const log = child({ component: 'api.setlist-intel' });
@@ -1385,9 +1386,10 @@ export const setlistIntelRouter = router({
       let itunesDurationMs: number | null = null;
       let itunesRateLimited = false;
       if (!finalPreviewUrl) {
-        if (
-          isRateLimited(`itunes:${userId}`, { max: 20, windowMs: 60_000 })
-        ) {
+        // Apple's ~20/min limit is per IP — global for this single-IP
+        // deployment — so the guard is deployment-wide, not per user. The old
+        // per-user bucket let N users collectively blow through it.
+        if (await isItunesLookupLimited()) {
           itunesRateLimited = true;
           log.warn(
             {
@@ -1395,7 +1397,7 @@ export const setlistIntelRouter = router({
               userId,
               title: input.title,
             },
-            'iTunes preview lookup skipped — per-user rate limit',
+            'iTunes preview lookup skipped — deployment-wide rate limit',
           );
         } else {
           try {

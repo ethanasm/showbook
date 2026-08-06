@@ -273,7 +273,7 @@ export const enrichmentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.parseChat',
         () =>
@@ -382,7 +382,7 @@ export const enrichmentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.extractCast',
         async () => {
@@ -433,7 +433,7 @@ export const enrichmentRouter = router({
   extractFromPdf: protectedProcedure
     .input(z.object({ fileBase64: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.extractFromPdf',
         async () => {
@@ -466,7 +466,7 @@ export const enrichmentRouter = router({
         }),
     )
     .mutation(async ({ input, ctx }) => {
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.extractFestivalLineup',
         async () => {
@@ -587,7 +587,7 @@ export const enrichmentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.scanGmailForShow',
         async () => {
@@ -641,8 +641,8 @@ export const enrichmentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      enforceBulkScanRateLimit(ctx.session.user.id);
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceBulkScanRateLimit(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.bulkScanGmail',
         async () => {
@@ -806,7 +806,7 @@ export const enrichmentRouter = router({
   gmailCollectMessages: protectedProcedure
     .input(z.object({ accessToken: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      enforceBulkScanRateLimit(ctx.session.user.id);
+      await enforceBulkScanRateLimit(ctx.session.user.id);
       const queries = buildBulkScanQueries();
       const messageCap = bulkScanMessageCap();
       const seen = new Set<string>();
@@ -839,7 +839,7 @@ export const enrichmentRouter = router({
       messageIds: z.array(z.string()).max(50),
     }))
     .mutation(async ({ input, ctx }) => {
-      enforceLLMQuota(ctx.session.user.id);
+      await enforceLLMQuota(ctx.session.user.id);
       return withTrace(
         'trpc.enrichment.gmailProcessBatch',
         async () => {

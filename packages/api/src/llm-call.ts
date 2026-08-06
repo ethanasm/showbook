@@ -18,6 +18,7 @@
 
 import type { z } from 'zod';
 import { groqUsage, traceLLM } from '@showbook/observability';
+import { enforceLLMBudget, meterLLMSpend } from './budget';
 
 // ─────────────────────────────────────────────────────────────────────
 // Error taxonomy
@@ -110,6 +111,17 @@ export interface WithLlmRetryOptions<T> {
  * type instead of error-message string-matching.
  */
 export async function withLlmRetry<T>(opts: WithLlmRetryOptions<T>): Promise<T> {
+  // The global spend gate, here rather than only at the tRPC edges, because
+  // this is the funnel every packages/api Groq call passes through — including
+  // the pg-boss job paths (digest preambles, album fill) that never see
+  // enforceLLMQuota. When the deployment's daily budget is exhausted, shedding
+  // happens before the SDK call, not after the money is spent.
+  try {
+    await enforceLLMBudget();
+  } catch (err) {
+    throw new LlmCallError(`LLM daily budget exhausted (${opts.name})`, err);
+  }
+
   const retries = opts.retries ?? 0;
   let lastError: unknown = null;
 
@@ -137,6 +149,11 @@ export async function withLlmRetry<T>(opts: WithLlmRetryOptions<T>): Promise<T> 
       }
       throw new LlmCallError(`Groq call failed (${opts.name})`, err);
     }
+
+    // Charge the real cost while the usage is in hand. Deliberately after the
+    // call and never throwing: the spend already happened, and a metering
+    // failure must not fail a successful completion (it logs instead).
+    await meterLLMSpend(opts.model, groqUsage(result));
 
     const content = pickContent(result);
     if (!content) {
