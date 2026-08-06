@@ -261,10 +261,18 @@ The body is `{ "query": "..." }`, optionally with `params` binding
 { "query": "select * from shows where id = $1", "params": ["abc"] }
 ```
 
-`params` accepts up to 32 JSON scalars (string / number / boolean /
-null); objects and arrays are refused with 422. It exists so
-programmatic clients don't have to inline their own literals to use the
-endpoint — see "Pointing mcp-queue-doctor at prod" below.
+`params` accepts up to 32 values, each a JSON scalar (string / number /
+boolean / null) or a one-level array of strings / numbers / nulls —
+arrays are what `where name = any($1)` binds. Objects, nested arrays,
+and **booleans inside arrays** are refused with 422; the last because
+postgres-js declares such an array with the element type and then
+applies the scalar serializer, so `select $1::bool` with `[[true]]`
+silently returns `false`. The whole body is capped at 1 MiB, drained
+rather than buffered.
+
+It exists so programmatic clients don't have to inline their own
+literals to use the endpoint — see "Pointing mcp-queue-doctor at prod"
+below.
 
 ```bash
 # One-time: generate the token and add to .env.prod, then restart prod web.

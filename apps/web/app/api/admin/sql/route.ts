@@ -15,8 +15,9 @@
  * `params` is optional and binds `$1`-style placeholders. It exists so
  * programmatic clients (mcp-queue-doctor talks to this endpoint instead of
  * requiring a Postgres route into the box) don't have to inline their own
- * literals to use it. Only JSON scalars are accepted — see
- * `validateAdminParams` in lib/admin-query.ts.
+ * literals to use it. Accepted values are JSON scalars and one-level arrays
+ * of strings/numbers/nulls (for `= any($1)`) — see `validateAdminParams` in
+ * lib/admin-query.ts for why booleans inside arrays are refused.
  *
  * Response 200:
  *   {
@@ -30,6 +31,7 @@
  *   401 { error: 'unauthorized' }   missing/bad bearer token, or token unset on server
  *   400 { error: 'bad_request', details }
  *   422 { error: 'query_rejected', details }   prefix guard refused the SQL
+ *   413 { error: 'bad_request', details }     body over MAX_BODY_BYTES
  *   500 { error: 'server_error', details? }
  *   504 { error: 'timeout' }        statement_timeout fired
  *
@@ -46,6 +48,10 @@
  *      exhaust web-process memory.
  *   6. Per-IP rate limit so a leaked token can't be used to DoS the
  *      database with cheap-but-numerous queries.
+ *   7. Body-size cap, drained rather than buffered, so a large upload
+ *      can't be forced into process memory before any check runs.
+ *   8. Extended query protocol pinned, so the wire format itself cannot
+ *      carry a second command.
  */
 
 import { NextResponse } from 'next/server';
@@ -53,7 +59,13 @@ import { timingSafeEqual } from 'node:crypto';
 import postgres from 'postgres';
 import { child } from '@showbook/observability';
 import { isRateLimited } from '@showbook/api';
-import { validateAdminParams, validateAdminQuery } from '@/lib/admin-query';
+import {
+  EXTENDED_PROTOCOL_ONLY,
+  MAX_BODY_BYTES,
+  validateAdminParams,
+  validateAdminQuery,
+} from '@/lib/admin-query';
+import { drainCapped } from '@/lib/drain-capped';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -160,11 +172,35 @@ export async function POST(req: Request) {
   }
 
   // 3. Parse + validate request body.
+  // Read the body with a hard ceiling rather than `req.json()`, which buffers
+  // the whole stream before any check can run. Content-Length is not a
+  // defence (absent when chunked, and a client can understate it) and App
+  // Router applies no limit of its own, so without this an authenticated
+  // caller could force an arbitrarily large body into process memory. The
+  // per-field caps below bound what Postgres sees; this bounds what Node holds.
+  const drained = await drainCapped(req.body, MAX_BODY_BYTES);
+  if (drained.overflowed) {
+    log.warn(
+      { event: 'admin.sql.body_too_large', ipKey },
+      'admin SQL body exceeded the size cap',
+    );
+    return NextResponse.json(
+      { error: 'bad_request', details: `body exceeds ${MAX_BODY_BYTES} bytes` },
+      { status: 413 },
+    );
+  }
+  if (drained.readFailed !== null) {
+    return NextResponse.json(
+      { error: 'bad_request', details: 'could not read request body' },
+      { status: 400 },
+    );
+  }
+
   let rawQuery: unknown;
   let rawParams: unknown;
   try {
-    const body = (await req.json()) as Record<string, unknown> | null;
-    if (!body || typeof body !== 'object') {
+    const body = JSON.parse(drained.body.toString('utf8')) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json(
         { error: 'bad_request', details: 'body must be a JSON object' },
         { status: 400 },
@@ -208,7 +244,14 @@ export async function POST(req: Request) {
       // postgres-js returns row arrays from .unsafe; cast to a plain array.
       // Passing params here (rather than letting a caller inline literals)
       // means bound values are never parsed as part of the statement.
-      const result = await tx.unsafe(validation.query, paramsValidation.params);
+      // EXTENDED_PROTOCOL_ONLY makes multi-command impossible at the
+      // protocol level; see its definition for why that is not redundant
+      // with the multi-statement text check.
+      const result = await tx.unsafe(
+        validation.query,
+        paramsValidation.params,
+        EXTENDED_PROTOCOL_ONLY,
+      );
       return result as unknown as unknown[];
     })) as unknown as unknown[];
   } catch (err) {
@@ -241,12 +284,47 @@ export async function POST(req: Request) {
         { status: 422 },
       );
     }
-    log.error(
-      { event: 'admin.sql.error', code, elapsedMs, err },
-      'admin SQL query failed',
-    );
     const details =
       err instanceof Error ? err.message : 'unknown postgres error';
+    // A malformed statement or an un-bindable parameter is the caller's
+    // mistake, not ours, so it belongs with the other 422s rather than looking
+    // like the server fell over. 42601 syntax_error, 42P18 indeterminate
+    // datatype, 42804 datatype_mismatch, 22P02 invalid_text_representation,
+    // 08P01 protocol_violation (too few/many bind values).
+    if (
+      code === '42601' ||
+      code === '42P18' ||
+      code === '42804' ||
+      code === '22P02' ||
+      code === '08P01'
+    ) {
+      log.warn(
+        { event: 'admin.sql.query_rejected', code, elapsedMs },
+        'admin SQL endpoint rejected a malformed query or parameter',
+      );
+      return NextResponse.json(
+        { error: 'query_rejected', details },
+        { status: 422 },
+      );
+    }
+    // Deliberately not logging `err`: a Postgres error message can quote the
+    // offending bind value, and CLAUDE.md's "never log raw user PII" rule
+    // applies to operator tooling too — the same reason this route logs query
+    // *length* and never the SQL. SQLSTATE is the triage field that matters;
+    // the full message still reaches the authenticated caller in the response,
+    // which is not the same channel as the log. The message is safe to log
+    // only when no parameters were supplied.
+    log.error(
+      {
+        event: 'admin.sql.error',
+        code,
+        elapsedMs,
+        errName: err instanceof Error ? err.name : 'unknown',
+        paramCount: paramsValidation.params.length,
+        ...(paramsValidation.params.length === 0 ? { detail: details } : {}),
+      },
+      'admin SQL query failed',
+    );
     return NextResponse.json(
       { error: 'server_error', details },
       { status: 500 },

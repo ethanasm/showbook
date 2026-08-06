@@ -188,6 +188,19 @@ describe('validateAdminParams', () => {
     assert.deepEqual(r.ok && r.params, [['a', 'b']]);
   });
 
+  it('rejects a boolean inside an array', () => {
+    // postgres-js declares the array with the *element* OID for bools, so the
+    // scalar serializer collapses [true] to a single `false` with no error.
+    // Measured against Postgres 16; see the comment in admin-query.ts.
+    const r = validateAdminParams([[true]]);
+    assert.equal(r.ok, false);
+    assert.match(r.ok === false ? r.reason : '', /boolean/);
+  });
+
+  it('still accepts a boolean as a top-level param, which binds correctly', () => {
+    assert.equal(validateAdminParams([true, false]).ok, true);
+  });
+
   it('rejects a nested array', () => {
     const r = validateAdminParams([[['a']]]);
     assert.equal(r.ok, false);

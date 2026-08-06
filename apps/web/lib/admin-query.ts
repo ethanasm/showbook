@@ -37,6 +37,35 @@ export const MAX_PARAM_LENGTH = 10_000;
  */
 export const MAX_PARAM_ARRAY_LENGTH = 1_000;
 
+/**
+ * Ceiling on the whole request body.
+ *
+ * The per-item caps above bound what Postgres is asked to plan, not what Node
+ * holds: multiplied out they would admit 32 × 1000 × 10_000 chars. This is the
+ * cap that actually matters, and it is enforced by draining the stream rather
+ * than by trusting Content-Length. A real diagnostic query with parameters is
+ * a few kilobytes.
+ */
+export const MAX_BODY_BYTES = 1_048_576;
+
+/**
+ * Options forcing postgres-js onto the extended query protocol.
+ *
+ * Simple mode is the only Postgres protocol that can carry more than one
+ * command in a single message, so pinning extended mode makes
+ * `select 1; select 2` impossible at the protocol level rather than something
+ * `hasMultipleStatements` has to catch by inspecting text. postgres-js
+ * otherwise chooses simple mode whenever there are no parameters
+ * (`'simple' in options ? options.simple : args.length === 0`).
+ *
+ * The cast is because that runtime behaviour is real but undeclared: the
+ * shipped `UnsafeQueryOptions` type lists only `prepare`. Asserted in rather
+ * than dropped, because this is a security property, not a preference.
+ */
+export const EXTENDED_PROTOCOL_ONLY = {
+  simple: false,
+} as unknown as { prepare?: boolean | undefined };
+
 const ALLOWED_VERBS = new Set([
   'SELECT',
   'EXPLAIN',
@@ -97,6 +126,22 @@ export function validateAdminParams(input: unknown): ParamsValidationResult {
       for (let j = 0; j < value.length; j++) {
         const element = validateScalar(value[j], `params[${i}][${j}]`);
         if (!element.ok) return { ok: false, reason: element.reason };
+        // Booleans inside an array are refused because postgres-js mis-binds
+        // them, measured against Postgres 16: its type inference recurses into
+        // the array and declares the *element* OID (bool), so the Describe
+        // round-trip has nothing left to correct and the scalar bool
+        // serializer is applied to the whole array. `select $1::bool` with
+        // [[true]] returns false — silently, no error — and
+        // `x = any($1)` raises 42809. Neither is a shape a real query wants:
+        // `where flag = any(array[true])` is just `where flag`. Strings and
+        // numbers infer as unknown, so Describe fills the type and they bind
+        // correctly.
+        if (typeof element.value === 'boolean') {
+          return {
+            ok: false,
+            reason: `params[${i}][${j}] must not be a boolean; booleans are only supported as top-level params`,
+          };
+        }
         elements.push(element.value);
       }
       params.push(elements);
