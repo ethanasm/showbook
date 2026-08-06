@@ -1,6 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateAdminQuery, MAX_QUERY_LENGTH } from '../admin-query';
+import {
+  validateAdminQuery,
+  validateAdminParams,
+  MAX_QUERY_LENGTH,
+  MAX_PARAMS,
+  MAX_PARAM_LENGTH,
+  MAX_PARAM_ARRAY_LENGTH,
+} from '../admin-query';
 
 describe('validateAdminQuery', () => {
   it('accepts a simple SELECT', () => {
@@ -147,5 +154,90 @@ describe('validateAdminQuery', () => {
   it('does not be fooled by SELECT inside a string literal of an INSERT', () => {
     const r = validateAdminQuery("INSERT INTO logs (msg) VALUES ('SELECT 1')");
     assert.equal(r.ok, false);
+  });
+});
+
+describe('validateAdminParams', () => {
+  it('treats an absent params field as no parameters', () => {
+    for (const input of [undefined, null]) {
+      const r = validateAdminParams(input);
+      assert.equal(r.ok, true);
+      assert.deepEqual(r.ok && r.params, []);
+    }
+  });
+
+  it('accepts JSON scalars', () => {
+    const r = validateAdminParams(['pgboss', 42, true, null]);
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.ok && r.params, ['pgboss', 42, true, null]);
+  });
+
+  it('rejects a params field that is not an array', () => {
+    const r = validateAdminParams({ 1: 'a' });
+    assert.equal(r.ok, false);
+  });
+
+  it('rejects objects as parameter values', () => {
+    const r = validateAdminParams([{ a: 1 }]);
+    assert.equal(r.ok, false);
+  });
+
+  it('accepts a one-level array, which is how `= any($1)` is bound', () => {
+    const r = validateAdminParams([['a', 'b']]);
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.ok && r.params, [['a', 'b']]);
+  });
+
+  it('rejects a boolean inside an array', () => {
+    // postgres-js declares the array with the *element* OID for bools, so the
+    // scalar serializer collapses [true] to a single `false` with no error.
+    // Measured against Postgres 16; see the comment in admin-query.ts.
+    const r = validateAdminParams([[true]]);
+    assert.equal(r.ok, false);
+    assert.match(r.ok === false ? r.reason : '', /boolean/);
+  });
+
+  it('still accepts a boolean as a top-level param, which binds correctly', () => {
+    assert.equal(validateAdminParams([true, false]).ok, true);
+  });
+
+  it('rejects a nested array', () => {
+    const r = validateAdminParams([[['a']]]);
+    assert.equal(r.ok, false);
+  });
+
+  it('rejects a non-scalar inside an array, naming both indices', () => {
+    const r = validateAdminParams([['ok', { bad: true }]]);
+    assert.equal(r.ok, false);
+    assert.match(r.ok === false ? r.reason : '', /params\[0\]\[1\]/);
+  });
+
+  it('caps the length of an array parameter', () => {
+    const within = new Array(MAX_PARAM_ARRAY_LENGTH).fill('x');
+    assert.equal(validateAdminParams([within]).ok, true);
+    assert.equal(validateAdminParams([[...within, 'x']]).ok, false);
+  });
+
+  it('rejects NaN and Infinity, which do not survive the wire as numbers', () => {
+    for (const bad of [[Number.NaN], [Number.POSITIVE_INFINITY]]) {
+      const r = validateAdminParams(bad);
+      assert.equal(r.ok, false);
+    }
+  });
+
+  it('caps the number of parameters', () => {
+    assert.equal(validateAdminParams(new Array(MAX_PARAMS).fill(1)).ok, true);
+    assert.equal(validateAdminParams(new Array(MAX_PARAMS + 1).fill(1)).ok, false);
+  });
+
+  it('caps the length of a single string parameter', () => {
+    assert.equal(validateAdminParams(['x'.repeat(MAX_PARAM_LENGTH)]).ok, true);
+    assert.equal(validateAdminParams(['x'.repeat(MAX_PARAM_LENGTH + 1)]).ok, false);
+  });
+
+  it('names the offending index so a client can fix the right argument', () => {
+    const r = validateAdminParams(['ok', { bad: true }]);
+    assert.equal(r.ok, false);
+    assert.match(r.ok === false ? r.reason : '', /params\[1\]/);
   });
 });

@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(pnpm prod:query:*)",
+      "Bash(node scripts/prod-query.mjs:*)",
+      "Bash(pnpm prod:health:ready)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

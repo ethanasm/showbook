@@ -32,3 +32,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 export const db = drizzle(client, { schema });
 export type Database = typeof db;
+
+// The raw postgres-js client, for the few consumers that need parameterised SQL
+// outside Drizzle's query builder — currently the budget governor's counter
+// functions (packages/api/src/budget.ts). Shares this module's one pool; see
+// the sizing math above before adding heavy users.
+export const pgClient = client;
