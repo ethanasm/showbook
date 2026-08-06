@@ -62,8 +62,8 @@ importers:
         specifier: ^0.4.2
         version: 0.4.2
       '@expo-google-fonts/geist-mono':
-        specifier: ^0.4.2
-        version: 0.4.2
+        specifier: ^0.4.3
+        version: 0.4.3
       '@expo/metro-runtime':
         specifier: ~57.0.5
         version: 57.0.5(@expo/log-box@57.0.1)(expo@57.0.6)(react-dom@19.2.3(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
@@ -1461,8 +1461,8 @@ packages:
   '@expo-google-fonts/fraunces@0.4.1':
     resolution: {integrity: sha512-gYc9P92ObyWvz1rWPOeWSvVKyBFIuA8hgOdhvo4DSiPBaWLbFA6v8uLIEIBwW+0oWTlXbBzjeBReHQI2H7UNjQ==}
 
-  '@expo-google-fonts/geist-mono@0.4.2':
-    resolution: {integrity: sha512-Ei2dBHXBgCL0pNi1RSuWIroOsvaNBeyT+2oE/q9vQBzZyqWuKYZ5yrybTeIeDl7MEWTgxBVUjyrws3JVbVac8Q==}
+  '@expo-google-fonts/geist-mono@0.4.3':
+    resolution: {integrity: sha512-gjnwv1QOG4meZpMhrLjTIPC/+lhyNu8EcXa2eJPVbPrYvguVjCfBq+Ezq6cWKWW8ung6fqb2TjvuTalE6lqlnw==}
 
   '@expo-google-fonts/geist@0.4.2':
     resolution: {integrity: sha512-cTsqJRQrvK5EniTVwH7UDK18RFf9Bc6yxciAuM936aViQ+eR6j3mLEI2rQkJXz5JP9kwtn8tHJviDyZ0ulH6oA==}
@@ -7878,7 +7878,7 @@ snapshots:
 
   '@expo-google-fonts/fraunces@0.4.1': {}
 
-  '@expo-google-fonts/geist-mono@0.4.2': {}
+  '@expo-google-fonts/geist-mono@0.4.3': {}
 
   '@expo-google-fonts/geist@0.4.2': {}
 
@@ -9048,7 +9048,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
