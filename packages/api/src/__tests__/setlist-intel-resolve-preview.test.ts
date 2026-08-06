@@ -372,8 +372,13 @@ describe('resolveTrackPreview — iTunes fallback', () => {
     assert.equal(itunesSearchCalls, 1);
   });
 
-  test('per-user iTunes rate-limit (20/min) trips after enough calls and skips the iTunes hop', async () => {
+  test('deployment-wide iTunes rate-limit (20/min) trips after enough calls and skips the iTunes hop', async () => {
     resetMocks();
+    // The iTunes guard is now deployment-wide (Apple throttles per IP, and
+    // this deployment is one IP), so earlier subtests in this file consumed
+    // from the same global minute bucket — reset it for an exact count.
+    const { _resetBudgetCountersForTests } = await import('../budget');
+    await _resetBudgetCountersForTests();
     spotifySearchResult = {
       id: 'sp_track_perlimit',
       previewUrl: null,
@@ -385,8 +390,8 @@ describe('resolveTrackPreview — iTunes fallback', () => {
     };
     const headlinerId = fakeUuid('p', 'hr');
     const userId = 'user-perlimit';
-    // 21 sequential calls — the iTunes bucket is 20/min, so the 21st
-    // call shouldn't fire iTunes.
+    // 21 sequential calls — the global iTunes bucket is 20/min, so the
+    // 21st call shouldn't fire iTunes.
     for (let i = 0; i < 21; i += 1) {
       const caller = makeCaller(headlinerId, { cachedRow: null }, userId);
       await caller.resolveTrackPreview({

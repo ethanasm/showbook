@@ -6,12 +6,29 @@ hostile cost-runaway, abuse, or data exposure. Repository-level controls
 (branch protection, secret scanning, Dependabot) are configured in the
 GitHub Settings UI and live outside this file.
 
-Every limit listed here is per-user unless noted otherwise. State for
-in-process rate limiters lives in a `Map` in
-`packages/api/src/rate-limit.ts` — it is reset on server restart and is not
-shared across multiple Next.js processes. For a single self-host deployment
-this is sufficient; if you scale horizontally you'll want to swap that
-helper for a Redis-backed implementation.
+Every limit listed here is per-user unless noted otherwise. Limiter state
+lives in two tiers:
+
+- **Per-minute buckets** stay in a `Map` in `packages/api/src/rate-limit.ts`
+  — in-process, reset on restart, fine for a single self-host deployment
+  whose windows clear in a minute anyway. (If you scale horizontally, swap
+  this helper for a shared-backend implementation — the durable tier below
+  already shows the shape.)
+- **The money tier** — the per-user daily LLM quota, the hourly bulk-scan
+  quota, the deployment-wide daily LLM **spend** ceiling, and the global
+  iTunes lookup guard — is backed by `mcp-budget-governor` over
+  **Postgres** (`packages/api/src/budget.ts`; counters in `mcpbg_counters`,
+  schema auto-created at first use the way pg-boss owns its schema). These
+  survive restarts: a redeploy no longer hands every user a fresh 50-call
+  LLM day. Without `DATABASE_URL` (unit tests, offline dev) the same layer
+  runs on an in-process backend.
+
+The daily **spend** ceiling is the one limit denominated in dollars:
+every Groq call is priced (tokens × Groq's per-Mtok rates) and metered
+against `SHOWBOOK_LLM_DAILY_BUDGET_USD` (default $5/day, all users
+combined). When the day's spend crosses it, further LLM calls — user-facing
+and pg-boss jobs alike — are shed until midnight UTC. Per-user call caps
+bound one user's share; this bounds the operator's bill.
 
 ---
 

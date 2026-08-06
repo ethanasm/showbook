@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { TRPCError } from '@trpc/server';
 import { enrichmentRouter } from '../routers/enrichment';
 import { enforceRateLimit } from '../rate-limit';
+import { enforceBulkScanRateLimit, enforceLLMQuota } from '../llm-quota';
 import { fakeCtx, makeFakeDb } from './_fake-db';
 
 const USER_ID = 'rate-limit-user';
@@ -21,6 +22,17 @@ function caller(userId = USER_ID) {
 
 function exhaustBucket(key: string, max: number, windowMs: number) {
   for (let i = 0; i < max; i++) enforceRateLimit(key, { max, windowMs });
+}
+
+// The LLM and bulk-scan quotas moved off the rate-limit Map onto the durable
+// budget governor (llm-quota.ts → budget.ts), so they are exhausted through
+// the real enforcement path rather than by poking the old bucket key.
+async function exhaustLLMQuota(userId: string, calls = 50) {
+  for (let i = 0; i < calls; i++) await enforceLLMQuota(userId);
+}
+
+async function exhaustBulkScanQuota(userId: string, calls = 5) {
+  for (let i = 0; i < calls; i++) await enforceBulkScanRateLimit(userId);
 }
 
 beforeEach(() => {
@@ -92,13 +104,11 @@ describe('enrichmentRouter rate limits', () => {
 });
 
 describe('enrichmentRouter LLM quota', () => {
-  // Fresh import gives each test a clean Map. The router has already been
-  // imported above with the default 50/day limit; for these tests we burn
-  // the per-user `llm:` bucket directly (which the router's
-  // enforceLLMQuota helper also writes to) using the matching key shape.
+  // Quota state is per (user, UTC day) in the budget governor, so each test
+  // burns its own distinct user's allowance through the real path.
   it('parseChat rejects once the daily LLM quota is exhausted', async () => {
     const userId = `${USER_ID}-llm-parse`;
-    exhaustBucket(`llm:${userId}`, 50, 24 * 60 * 60 * 1000);
+    await exhaustLLMQuota(userId);
     await assert.rejects(
       () => caller(userId).parseChat({ freeText: 'some show' }),
       (err: unknown) =>
@@ -108,7 +118,7 @@ describe('enrichmentRouter LLM quota', () => {
 
   it('extractCast rejects once the daily LLM quota is exhausted', async () => {
     const userId = `${USER_ID}-llm-cast`;
-    exhaustBucket(`llm:${userId}`, 50, 24 * 60 * 60 * 1000);
+    await exhaustLLMQuota(userId);
     await assert.rejects(
       () => caller(userId).extractCast({ imageBase64: '/9j/abc' }),
       (err: unknown) =>
@@ -118,7 +128,7 @@ describe('enrichmentRouter LLM quota', () => {
 
   it('extractFromPdf rejects once the daily LLM quota is exhausted', async () => {
     const userId = `${USER_ID}-llm-pdf`;
-    exhaustBucket(`llm:${userId}`, 50, 24 * 60 * 60 * 1000);
+    await exhaustLLMQuota(userId);
     await assert.rejects(
       () => caller(userId).extractFromPdf({ fileBase64: 'abc' }),
       (err: unknown) =>
@@ -128,7 +138,7 @@ describe('enrichmentRouter LLM quota', () => {
 
   it('scanGmailForShow rejects once the daily LLM quota is exhausted', async () => {
     const userId = `${USER_ID}-llm-gmail-one`;
-    exhaustBucket(`llm:${userId}`, 50, 24 * 60 * 60 * 1000);
+    await exhaustLLMQuota(userId);
     await assert.rejects(
       () =>
         caller(userId).scanGmailForShow({
@@ -142,7 +152,7 @@ describe('enrichmentRouter LLM quota', () => {
 
   it('gmailProcessBatch rejects once the daily LLM quota is exhausted', async () => {
     const userId = `${USER_ID}-llm-gmail-batch`;
-    exhaustBucket(`llm:${userId}`, 50, 24 * 60 * 60 * 1000);
+    await exhaustLLMQuota(userId);
     await assert.rejects(
       () =>
         caller(userId).gmailProcessBatch({
@@ -169,7 +179,7 @@ describe('enrichmentRouter LLM quota', () => {
 describe('enrichmentRouter bulk-scan rate limits', () => {
   it('bulkScanGmail rejects once the per-hour bucket is exhausted', async () => {
     const userId = `${USER_ID}-bulk`;
-    exhaustBucket(`bulk-scan:${userId}`, 5, 60 * 60 * 1000);
+    await exhaustBulkScanQuota(userId);
     await assert.rejects(
       () => caller(userId).bulkScanGmail({ accessToken: 'token' }),
       (err: unknown) =>
@@ -179,7 +189,7 @@ describe('enrichmentRouter bulk-scan rate limits', () => {
 
   it('gmailCollectMessages rejects once the per-hour bucket is exhausted', async () => {
     const userId = `${USER_ID}-collect`;
-    exhaustBucket(`bulk-scan:${userId}`, 5, 60 * 60 * 1000);
+    await exhaustBulkScanQuota(userId);
     await assert.rejects(
       () => caller(userId).gmailCollectMessages({ accessToken: 'token' }),
       (err: unknown) =>

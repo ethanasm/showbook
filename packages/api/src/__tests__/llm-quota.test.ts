@@ -86,14 +86,19 @@ describe('bulkScanMessageCap', () => {
 });
 
 describe('enforceLLMQuota', () => {
+  // Enforcement is async now (the durable backend is Postgres in prod; the
+  // in-process backend here, since unit tests run without DATABASE_URL) and
+  // still throws TRPCError(TOO_MANY_REQUESTS). Counter state is per (user,
+  // UTC day) and lives in the budget module, which is cached across the
+  // freshImport cache-busting — hence a distinct userId per test.
   it('allows up to the daily cap then throws TOO_MANY_REQUESTS', async () => {
     process.env.SHOWBOOK_LLM_CALLS_PER_DAY = '3';
     const { enforceLLMQuota } = await freshImport();
     const userId = 'user-quota-cap';
-    enforceLLMQuota(userId);
-    enforceLLMQuota(userId);
-    enforceLLMQuota(userId);
-    assert.throws(
+    await enforceLLMQuota(userId);
+    await enforceLLMQuota(userId);
+    await enforceLLMQuota(userId);
+    await assert.rejects(
       () => enforceLLMQuota(userId),
       (err: unknown) =>
         err instanceof TRPCError && err.code === 'TOO_MANY_REQUESTS',
@@ -103,13 +108,24 @@ describe('enforceLLMQuota', () => {
   it('keeps per-user quotas independent', async () => {
     process.env.SHOWBOOK_LLM_CALLS_PER_DAY = '2';
     const { enforceLLMQuota } = await freshImport();
-    enforceLLMQuota('alice');
-    enforceLLMQuota('alice');
-    assert.throws(() => enforceLLMQuota('alice'), TRPCError);
+    await enforceLLMQuota('alice');
+    await enforceLLMQuota('alice');
+    await assert.rejects(() => enforceLLMQuota('alice'), TRPCError);
     // bob has not used any quota yet
-    assert.doesNotThrow(() => enforceLLMQuota('bob'));
-    assert.doesNotThrow(() => enforceLLMQuota('bob'));
-    assert.throws(() => enforceLLMQuota('bob'), TRPCError);
+    await enforceLLMQuota('bob');
+    await enforceLLMQuota('bob');
+    await assert.rejects(() => enforceLLMQuota('bob'), TRPCError);
+  });
+
+  it('rejection does not consume quota (a refused call is not charged)', async () => {
+    process.env.SHOWBOOK_LLM_CALLS_PER_DAY = '1';
+    const { enforceLLMQuota } = await freshImport();
+    await enforceLLMQuota('carol');
+    await assert.rejects(() => enforceLLMQuota('carol'), TRPCError);
+    // Raising the cap shows the rejected attempts were never counted: exactly
+    // one unit is used, so one more fits under a cap of 2.
+    process.env.SHOWBOOK_LLM_CALLS_PER_DAY = '2';
+    await enforceLLMQuota('carol');
   });
 });
 
@@ -118,9 +134,9 @@ describe('enforceBulkScanRateLimit', () => {
     process.env.SHOWBOOK_BULK_SCAN_PER_HOUR = '2';
     const { enforceBulkScanRateLimit } = await freshImport();
     const userId = 'bulk-user';
-    enforceBulkScanRateLimit(userId);
-    enforceBulkScanRateLimit(userId);
-    assert.throws(
+    await enforceBulkScanRateLimit(userId);
+    await enforceBulkScanRateLimit(userId);
+    await assert.rejects(
       () => enforceBulkScanRateLimit(userId),
       (err: unknown) =>
         err instanceof TRPCError && err.code === 'TOO_MANY_REQUESTS',
@@ -133,9 +149,9 @@ describe('enforceBulkScanRateLimit', () => {
     const { enforceBulkScanRateLimit, enforceLLMQuota } = await freshImport();
     const userId = 'shared-user';
     // burning the LLM quota must not affect the bulk-scan bucket
-    enforceLLMQuota(userId);
-    assert.throws(() => enforceLLMQuota(userId), TRPCError);
-    assert.doesNotThrow(() => enforceBulkScanRateLimit(userId));
-    assert.throws(() => enforceBulkScanRateLimit(userId), TRPCError);
+    await enforceLLMQuota(userId);
+    await assert.rejects(() => enforceLLMQuota(userId), TRPCError);
+    await enforceBulkScanRateLimit(userId);
+    await assert.rejects(() => enforceBulkScanRateLimit(userId), TRPCError);
   });
 });
