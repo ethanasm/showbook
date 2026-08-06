@@ -1,5 +1,5 @@
 /**
- * The durable budget layer, backed by `@ethanasm/mcp-budget-governor`.
+ * The durable budget layer, backed by `mcp-budget-governor`.
  *
  * Showbook's per-minute buckets (`rate-limit.ts`) deliberately stay in-process:
  * this is a single-process deployment, those windows clear in a minute, and the
@@ -40,7 +40,7 @@ import {
   type Backend,
   type Context,
   type MeterResult,
-} from '@ethanasm/mcp-budget-governor';
+} from 'mcp-budget-governor';
 import { TRPCError } from '@trpc/server';
 import { pgClient } from '@showbook/db';
 import { child } from '@showbook/observability';

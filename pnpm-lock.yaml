@@ -266,9 +266,6 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.2.3)
-      '@ethanasm/mcp-budget-governor':
-        specifier: git+https://github.com/ethanasm/mcp-budget-governor.git#3d6db38ddb2428009996f187b4edd47d4c23b6af&path:ts
-        version: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts
       '@showbook/api':
         specifier: workspace:*
         version: link:../../packages/api
@@ -405,9 +402,6 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1089.0
         version: 3.1089.0
-      '@ethanasm/mcp-budget-governor':
-        specifier: git+https://github.com/ethanasm/mcp-budget-governor.git#3d6db38ddb2428009996f187b4edd47d4c23b6af&path:ts
-        version: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts
       '@showbook/db':
         specifier: workspace:*
         version: link:../db
@@ -426,6 +420,9 @@ importers:
       groq-sdk:
         specifier: ^1.3.0
         version: 1.3.0
+      mcp-budget-governor:
+        specifier: ^0.1.0
+        version: 0.1.0
       pg-boss:
         specifier: ^12.25.1
         version: 12.25.1
@@ -1451,11 +1448,6 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-
-  '@ethanasm/mcp-budget-governor@https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts':
-    resolution: {gitHosted: true, integrity: sha512-kHKtrcbIGDifPIebNlRVWR+/bPkcMqXzgSUzf1sPeThKOclf9GAhvjdk4KbcNNRn+nzojvsoEAzpf0TZyaS9cw==, tarball: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af}
-    version: 0.1.0
-    engines: {node: '>=20'}
 
   '@exodus/bytes@1.15.0':
     resolution: {integrity: sha512-UY0nlA+feH81UGSHv92sLEPLCeZFjXOuHhrIo0HQydScuQc8s0A7kL/UdgwgDq8g8ilksmuoF35YVTNphV2aBQ==}
@@ -5159,6 +5151,10 @@ packages:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
 
+  mcp-budget-governor@0.1.0:
+    resolution: {integrity: sha512-eVwOpDHPHqB4q16iUT8SqvewZYWNyD5I0KARLekPW0pm8YtkFyk/p+8m4UbEFwN+OFKkqatjrrcy1ChhnH/erg==}
+    engines: {node: '>=20'}
+
   mdn-data@2.0.14:
     resolution: {integrity: sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==}
 
@@ -7878,8 +7874,6 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@ethanasm/mcp-budget-governor@https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts': {}
-
   '@exodus/bytes@1.15.0': {}
 
   '@expo-google-fonts/fraunces@0.4.1': {}
@@ -9054,9 +9048,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -11820,6 +11812,8 @@ snapshots:
   marky@1.3.0: {}
 
   math-intrinsics@1.1.0: {}
+
+  mcp-budget-governor@0.1.0: {}
 
   mdn-data@2.0.14: {}
 

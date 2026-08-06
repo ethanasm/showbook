@@ -2,7 +2,7 @@
  * LLM quota knobs and enforcement.
  *
  * The enforcement moved to the durable budget layer (`budget.ts`, backed by
- * `@ethanasm/mcp-budget-governor` over Postgres): the daily quota now survives
+ * `mcp-budget-governor` over Postgres): the daily quota now survives
  * redeploys — previously the in-process Map reset to zero and handed every user
  * a fresh 50-call day — and `enforceLLMQuota` also checks the deployment-wide
  * daily *spend* ceiling, so job-free traffic can't run the operator's bill past

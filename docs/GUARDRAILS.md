@@ -16,7 +16,7 @@ lives in two tiers:
   already shows the shape.)
 - **The money tier** — the per-user daily LLM quota, the hourly bulk-scan
   quota, the deployment-wide daily LLM **spend** ceiling, and the global
-  iTunes lookup guard — is backed by `@ethanasm/mcp-budget-governor` over
+  iTunes lookup guard — is backed by `mcp-budget-governor` over
   **Postgres** (`packages/api/src/budget.ts`; counters in `mcpbg_counters`,
   schema auto-created at first use the way pg-boss owns its schema). These
   survive restarts: a redeploy no longer hands every user a fresh 50-call

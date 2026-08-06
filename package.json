@@ -111,8 +111,7 @@
       "esbuild",
       "nx",
       "sharp",
-      "unrs-resolver",
-      "@ethanasm/mcp-budget-governor"
+      "unrs-resolver"
     ]
   }
 }
