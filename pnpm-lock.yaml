@@ -266,6 +266,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.2.3)
+      '@ethanasm/mcp-budget-governor':
+        specifier: git+https://github.com/ethanasm/mcp-budget-governor.git#3d6db38ddb2428009996f187b4edd47d4c23b6af&path:ts
+        version: https://codeload.github.com/ethanasm/mcp-budget-governor/tar.gz/3d6db38ddb2428009996f187b4edd47d4c23b6af#path:ts
       '@showbook/api':
         specifier: workspace:*
         version: link:../../packages/api
@@ -9051,7 +9054,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 

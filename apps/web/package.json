@@ -23,6 +23,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@ethanasm/mcp-budget-governor": "git+https://github.com/ethanasm/mcp-budget-governor.git#3d6db38ddb2428009996f187b4edd47d4c23b6af&path:ts",
     "@showbook/api": "workspace:*",
     "@showbook/db": "workspace:*",
     "@showbook/jobs": "workspace:*",
