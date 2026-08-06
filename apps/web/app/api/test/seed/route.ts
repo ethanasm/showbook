@@ -364,11 +364,23 @@ export async function GET(request: Request) {
       const btId = venueMap.get('The Beacon Theatre')!;
 
       // Build a 90-night Hamilton run for testing run-card rendering.
+      //
+      // Anchored to *today*, deliberately starting a few days in the past so
+      // the fixture also exercises the in-progress-run case (first night gone,
+      // run still going). It used to be the hardcoded '2026-08-01', which
+      // silently expired on 2026-08-02 and left two E2E shards permanently red
+      // — a fixture whose validity depends on the wall clock will always rot,
+      // so keep this relative.
       const hamiltonDates: string[] = [];
-      const hamStart = new Date('2026-08-01');
+      const hamStart = new Date();
+      hamStart.setUTCHours(0, 0, 0, 0);
+      hamStart.setUTCDate(hamStart.getUTCDate() - 3);
       for (let i = 0; i < 90; i++) {
+        // UTC throughout — hamStart is normalised to UTC midnight, so mixing in
+        // local getDate()/setDate() would shift the whole run by a day in any
+        // negative-offset timezone.
         const d = new Date(hamStart);
-        d.setDate(hamStart.getDate() + i);
+        d.setUTCDate(hamStart.getUTCDate() + i);
         hamiltonDates.push(d.toISOString().slice(0, 10));
       }
       const radioCityId = venueMap.get('Radio City Music Hall')!;

@@ -13,6 +13,7 @@ import { and, db, eq, mediaAssets } from "@showbook/db";
 import type { MediaVariant } from "@showbook/db";
 import { child } from "@showbook/observability";
 import { matchPendingVariant } from "@/lib/media-upload-auth";
+import { drainCapped } from "@/lib/drain-capped";
 
 // Force the route onto the Node runtime + dynamic so Next.js doesn't try
 // to statically optimise it, and the `auth()` / AWS SDK calls run on a
@@ -202,17 +203,36 @@ export async function PUT(request: NextRequest) {
   // the server tried to communicate. Keeping the body read at the top
   // means the server only responds once the upload stream is fully
   // consumed.
-  let body: Buffer;
-  try {
-    body = Buffer.from(await request.arrayBuffer());
-  } catch (err) {
+  //
+  // Drain with a cap rather than buffering first. `Content-Length` above is
+  // only advisory — it is absent on a chunked upload and a client can simply
+  // lie — so `await request.arrayBuffer()` would materialise the whole body in
+  // memory before any size check could reject it, and App Router route handlers
+  // apply no body limit of their own. Past `maxBytes` we stop retaining chunks
+  // but keep reading to the end of the stream, so the -1017 behaviour above is
+  // preserved while memory stays bounded.
+  const { body, overflowed, readFailed } = await drainCapped(
+    request.body,
+    maxBytes,
+  );
+  if (readFailed) {
     log.error(
-      { event: "media.upload.read_body_failed", err, key, userId, requestId },
+      {
+        event: "media.upload.read_body_failed",
+        err: readFailed,
+        key,
+        userId,
+        requestId,
+      },
       "Failed reading upload body",
     );
     return plainResponse(400, "failed to read upload body");
   }
-  if (body.length > maxBytes) {
+  if (overflowed) {
+    log.warn(
+      { event: "media.upload.too_large", key, userId, requestId, maxBytes },
+      "Upload exceeded the reserved byte ceiling",
+    );
     return plainResponse(413, "payload too large");
   }
 
