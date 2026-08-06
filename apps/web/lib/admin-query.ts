@@ -29,6 +29,13 @@ export const MAX_QUERY_LENGTH = 10_000;
  */
 export const MAX_PARAMS = 32;
 export const MAX_PARAM_LENGTH = 10_000;
+/**
+ * A parameter may be a one-level array — `where name = any($1)` is how you
+ * filter by a set without generating N placeholders, so refusing arrays would
+ * refuse an ordinary query shape. Bounded so a single parameter can't carry an
+ * unbounded list for Postgres to plan around.
+ */
+export const MAX_PARAM_ARRAY_LENGTH = 1_000;
 
 const ALLOWED_VERBS = new Set([
   'SELECT',
@@ -44,7 +51,8 @@ export type ValidationResult =
   | { ok: false; reason: string };
 
 /** A value that can safely be bound to a placeholder. */
-export type AdminQueryParam = string | number | boolean | null;
+export type AdminQueryScalar = string | number | boolean | null;
+export type AdminQueryParam = AdminQueryScalar | AdminQueryScalar[];
 
 export type ParamsValidationResult =
   | { ok: true; params: AdminQueryParam[] }
@@ -59,9 +67,10 @@ export type ParamsValidationResult =
  * reason. Passing them through to Postgres as parameters keeps values out of
  * the parsed statement entirely.
  *
- * Only JSON scalars are accepted. Objects and arrays would reach postgres-js
- * as json / array types, which no diagnostic query here needs, and a narrow
- * contract is easy to widen later — the reverse is not.
+ * Accepted values are JSON scalars and one-level arrays of them (the latter
+ * for `= any($1)`). Objects are refused, and so is nesting: neither is needed
+ * by a diagnostic query, and a narrow contract is easy to widen later — the
+ * reverse is not.
  */
 export function validateAdminParams(input: unknown): ParamsValidationResult {
   if (input === undefined || input === null) return { ok: true, params: [] };
@@ -76,34 +85,56 @@ export function validateAdminParams(input: unknown): ParamsValidationResult {
   const params: AdminQueryParam[] = [];
   for (let i = 0; i < input.length; i++) {
     const value: unknown = input[i];
-    if (value === null || typeof value === 'boolean') {
-      params.push(value);
-      continue;
-    }
-    if (typeof value === 'number') {
-      if (!Number.isFinite(value)) {
-        return { ok: false, reason: `params[${i}] must be a finite number` };
-      }
-      params.push(value);
-      continue;
-    }
-    if (typeof value === 'string') {
-      if (value.length > MAX_PARAM_LENGTH) {
+
+    if (Array.isArray(value)) {
+      if (value.length > MAX_PARAM_ARRAY_LENGTH) {
         return {
           ok: false,
-          reason: `params[${i}] too long (max ${MAX_PARAM_LENGTH} chars)`,
+          reason: `params[${i}] has too many elements (max ${MAX_PARAM_ARRAY_LENGTH})`,
         };
       }
-      params.push(value);
+      const elements: AdminQueryScalar[] = [];
+      for (let j = 0; j < value.length; j++) {
+        const element = validateScalar(value[j], `params[${i}][${j}]`);
+        if (!element.ok) return { ok: false, reason: element.reason };
+        elements.push(element.value);
+      }
+      params.push(elements);
       continue;
     }
-    return {
-      ok: false,
-      reason: `params[${i}] must be a string, number, boolean, or null`,
-    };
+
+    const scalar = validateScalar(value, `params[${i}]`);
+    if (!scalar.ok) return { ok: false, reason: scalar.reason };
+    params.push(scalar.value);
   }
 
   return { ok: true, params };
+}
+
+type ScalarResult =
+  | { ok: true; value: AdminQueryScalar }
+  | { ok: false; reason: string };
+
+function validateScalar(value: unknown, path: string): ScalarResult {
+  if (value === null || typeof value === 'boolean') return { ok: true, value };
+  if (typeof value === 'number') {
+    // NaN / Infinity have no JSON representation and no Postgres equivalent
+    // for the types these queries bind; they arrive only from a buggy client.
+    if (!Number.isFinite(value)) {
+      return { ok: false, reason: `${path} must be a finite number` };
+    }
+    return { ok: true, value };
+  }
+  if (typeof value === 'string') {
+    if (value.length > MAX_PARAM_LENGTH) {
+      return { ok: false, reason: `${path} too long (max ${MAX_PARAM_LENGTH} chars)` };
+    }
+    return { ok: true, value };
+  }
+  return {
+    ok: false,
+    reason: `${path} must be a string, number, boolean, or null`,
+  };
 }
 
 /**

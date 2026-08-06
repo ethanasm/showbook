@@ -165,6 +165,21 @@ describe('admin/sql bind parameters', { skip: !HAS_DB }, () => {
     assert.deepEqual(rows[0], { name: 'pgboss', n: 42, flag: true });
   });
 
+  it('binds an array parameter, which is how `= any($1)` filters a set', async () => {
+    const rows = await client!.begin('READ ONLY', async (tx) => {
+      const result = await tx.unsafe(
+        "select x from unnest(array['a','b','c']) as x where x = any($1)",
+        [['a', 'c']],
+      );
+      return result as unknown as Array<Record<string, unknown>>;
+    });
+
+    assert.deepEqual(
+      rows.map((r) => r.x),
+      ['a', 'c'],
+    );
+  });
+
   it('treats a parameter as a value, never as SQL', async () => {
     // If this were interpolated rather than bound, the statement would error
     // or return something other than the literal string.
