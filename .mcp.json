@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "queue-doctor": {
+      "command": "npx",
+      "args": ["-y", "mcp-queue-doctor@0.2.0"],
+      "env": {
+        "QUEUE_DOCTOR_HTTP_SQL_URL": "${ADMIN_QUERY_URL}/api/admin/sql",
+        "QUEUE_DOCTOR_HTTP_SQL_TOKEN": "${ADMIN_QUERY_TOKEN}",
+        "QUEUE_DOCTOR_BACKEND": "pgboss",
+        "QUEUE_DOCTOR_SCHEMA": "pgboss",
+        "QUEUE_DOCTOR_LOG_LEVEL": "warn"
+      }
+    }
+  }
+}
