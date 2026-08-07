@@ -323,10 +323,18 @@ Then ask it "is anything wrong with the queue?".
 
 Four things worth knowing:
 
-- **The version is pinned** (`mcp-queue-doctor@0.2.0`). The HTTP transport
-  landed in 0.2.0; 0.1.0 has no such thing and would fail at startup
-  demanding a `DATABASE_URL`. Pinning also means a future release can't
-  silently change what runs against prod.
+- **The version is pinned** (`mcp-queue-doctor@0.2.2`). The HTTP transport
+  landed in 0.2.0 (0.1.0 has none and would fail at startup demanding a
+  `DATABASE_URL`), and `QUEUE_DOCTOR_THRESHOLDS` landed in 0.2.1. Pinning
+  also means a future release can't silently change what runs against
+  prod — the cost is that picking up a new one is a deliberate edit here.
+- **Rule thresholds are tunable** via `QUEUE_DOCTOR_THRESHOLDS`, a JSON
+  object merged over the defaults. Worth knowing because the defaults
+  were tuned to *this* queue, so they will read as noise on any other:
+  the eleven `dead-queue` notes prod currently reports are all queues
+  deliberately registered-but-unscheduled for `/admin` triggers, and
+  `{"idleQueueSeconds":7776000}` silences them. An unknown key fails
+  startup rather than being ignored.
 - **The endpoint's limits win, not the tool's.** The 3s
   `statement_timeout` and 1000-row cap here override
   `QUEUE_DOCTOR_STATEMENT_TIMEOUT_MS` / `QUEUE_DOCTOR_MAX_ROWS`.
