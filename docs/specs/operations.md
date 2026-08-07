@@ -323,7 +323,7 @@ Then ask it "is anything wrong with the queue?".
 
 Four things worth knowing:
 
-- **The version is pinned** (`mcp-queue-doctor@0.2.1`). The HTTP transport
+- **The version is pinned** (`mcp-queue-doctor@0.2.2`). The HTTP transport
   landed in 0.2.0 (0.1.0 has none and would fail at startup demanding a
   `DATABASE_URL`), and `QUEUE_DOCTOR_THRESHOLDS` landed in 0.2.1. Pinning
   also means a future release can't silently change what runs against

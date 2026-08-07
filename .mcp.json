@@ -2,7 +2,7 @@
   "mcpServers": {
     "queue-doctor": {
       "command": "npx",
-      "args": ["-y", "mcp-queue-doctor@0.2.1"],
+      "args": ["-y", "mcp-queue-doctor@0.2.2"],
       "env": {
         "QUEUE_DOCTOR_HTTP_SQL_URL": "${ADMIN_QUERY_URL}/api/admin/sql",
         "QUEUE_DOCTOR_HTTP_SQL_TOKEN": "${ADMIN_QUERY_TOKEN}",
