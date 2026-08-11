@@ -60,6 +60,10 @@ Symptom from user
         ├── "is row X actually there in prod" / "what does prod's state look like"
         │       └─→ /api/admin/sql via `pnpm prod:query` (read-only)
         │
+        ├── stale / outdated data reported in the MOBILE app (screenshots)
+        │       └─→ suspect the client, not the pipeline — see
+        │           "Stale mobile data" below BEFORE auditing crons
+        │
         ├── LLM call quality issue (bad output, hallucination, slow)
         │       └─→ STOP — Langfuse, not Axiom
         │
@@ -134,6 +138,37 @@ Drop these into the `<<APL>>` slot above.
 Note: nested error fields are flattened by Axiom's ingest into dotted columns
 (`err.message`, `err.cause.message`, etc.). Reference them with bracket-quoted
 identifiers in APL — bare `err` will fail to compile.
+
+## Stale mobile data — check the client before the pipeline
+
+The mobile app is **offline-first**: every screen renders from the persisted
+query cache, and a device whose session token lapsed (30-day TTL, no silent
+refresh) 401s on every refetch while the screens keep looking populated.
+The result is screenshots "proving" prod serves weeks-old data when the
+server is actually clean — the 2026-08-11 incident was three weeks of
+Discover rendering a Jul-22 snapshot (see the knowledge vault:
+`brain/projects/showbook/decisions/2026-08-11-discover-pruning-stale-cache.md`).
+Two checks settle it in minutes:
+
+**1. Is the device's traffic failing auth?** Client-side failures round-trip
+to Axiom as `trpc.error` via mobile telemetry:
+
+```
+["showbook-prod"] | where _time > ago(7d) and event == "trpc.error" | extend path = tostring(fields["path"]), code = tostring(fields["code"]) | summarize count() by path, code | order by count_ desc
+```
+
+A wall of `UNAUTHORIZED` across ordinary read paths = dead session. Daily
+shape via `summarize count() by bin(_time, 1d), event` shows when it began
+(≈ token mint date + 30 days).
+
+**2. Do the screenshotted rows exist server-side at all?** Query the exact
+entities (`pnpm prod:query`, by headliner/date). If they're absent, the
+server already did its job and no cron/pipeline work will change what the
+phone shows — the fix is re-auth (and the client-side stale-cache guard in
+`apps/mobile/lib/discover/upcoming.ts` bounds the blast radius).
+
+If both come back clean (traffic healthy, rows present), *then* audit the
+pipeline (prune events, ingest, feed filters).
 
 ## DB introspection — `/api/admin/sql`
 
@@ -241,7 +276,8 @@ docker logs showbook-prod-web --since 30m 2>&1 | jq -c 'select(.level=="error") 
 - **Wrong token = empty results, not auth error.** `AXIOM_TOKEN` is ingest-only. If `AXIOM_QUERY_TOKEN` was created without `Query` capability on `showbook-prod`, Axiom returns 200 with no rows. Verify in the UI under Settings → Tokens.
 - **Org id ≠ dataset name.** The dataset is `showbook-prod`; the org slug is something else (e.g. `showbook-egap`). Do not hardcode it — let the `/v1/orgs` lookup resolve it. Setting `AXIOM_ORG_ID=showbook-prod` (the dataset) makes every query 404.
 - **Org header is required for query requests.** Omitting `X-AXIOM-ORG-ID` on `/v1/datasets/_apl` gives a 400; pointing it at the wrong org gives a 404 with empty body (not a clear auth error).
-- **Timezone.** `_time` is UTC. Convert with `bin_auto(_time)` and `format_datetime(_time, "yyyy-MM-dd HH:mm:ss")` if comparing against ET-scheduled jobs (digest at 08:00 ET = 12:00/13:00 UTC depending on DST).
+- **Timezone.** `_time` is UTC. Bucket with `bin(_time, 1d)` / `bin_auto(_time)` when comparing against ET-scheduled jobs (digest at 08:00 ET = 12:00/13:00 UTC depending on DST). **`format_datetime` does not exist** in this Axiom deployment's APL — it compiles to `function 'format_datetime' not found`; do day-grouping with `bin`, not string formatting.
+- **App-supplied fields live in the `fields` map.** Only `CORE_FIELDS` (`event`, `component`, `userId`, `jobId`, `msg`, …) are real columns; everything else a call site logs (e.g. `trpc.error`'s `path`/`code`) is addressed as `fields["key"]` — usually via `extend x = tostring(fields["key"])` before a `summarize by`. A bare `where path == …` on a folded key silently matches nothing.
 
 ## Quick reference
 
