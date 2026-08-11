@@ -47,6 +47,37 @@ both web and mobile, the body gets both sets. Capture paths:
   wastes minutes; mobile Maestro burns EAS build minutes for nothing.
 - The PR is a doc-only or config-only change.
 
+## Sandbox environment gotchas (read before either flow)
+
+Three traps hit in real runs (2026-08-11), all of which produce
+plausible-looking failures or — worse — silently wrong captures:
+
+- **Missing Playwright browser.** Both Playwright configs (web + mobile)
+  honor `PLAYWRIGHT_CHROMIUM_PATH`. If a run fails with
+  `Executable doesn't exist at /opt/pw-browsers/chromium_headless_shell-…`,
+  do NOT run `playwright install` (the sandbox pre-installs Chromium) —
+  prefix the run with `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium`.
+- **The mobile build alias is root-only.** `pnpm mobile:web:build` exists
+  in the ROOT package.json; from `apps/mobile/` the command is
+  `pnpm web:build`. Running the root alias from `apps/mobile` fails with
+  only a soft `Did you mean "pnpm web:build"?` — and if you miss that
+  line, the next Playwright run captures the **stale bundle**, i.e. the
+  same silent both-captures-are-AFTER failure as the revert-without-
+  rebuild trap in the mobile flow. Always confirm the build printed
+  `Exported: dist-web` before capturing.
+- **Web mixed-batch passthrough vs the self-signed dev cert.** Specs that
+  crib the batch-aware tRPC interceptor from `tests/hype-playlist.spec.ts`
+  call Node's `fetch` to pass unmocked procedures through to the real
+  server; against `next dev --experimental-https` that fetch dies with
+  `self-signed certificate in certificate chain` (the browser context
+  ignores it via `ignoreHTTPSErrors`, Node does not). Prefix the capture
+  run with `NODE_TLS_REJECT_UNAUTHORIZED=0` — capture runs only, never a
+  committed config.
+
+Also: the show-detail tab bar on the Expo-web render is NOT exposed as
+`role=button` (unlike `SegmentedControl` options) — click tabs via
+`getByText('Setlist', { exact: true })`.
+
 ## Web flow
 
 ### 1. Build the route list

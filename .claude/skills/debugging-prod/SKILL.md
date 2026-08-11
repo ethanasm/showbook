@@ -26,7 +26,7 @@ The runbook below turns a vague prod report into the next concrete query. CLAUDE
 - **LLM regressions** (bad output, slow generations, missing tool calls) → Langfuse, not Axiom. Traces from `traceLLM` / `withTrace` are not in this dataset.
 - **Local/dev debugging** → `AXIOM_TOKEN` is intentionally unset in `.env.dev`; just read stdout.
 - **Migration issues** → check `pnpm prod:db:migrate` output. (Schema *introspection* is fine via `/api/admin/sql` — see below — but applying migrations isn't.)
-- **Cloud / web-sandbox sessions, Axiom queries only** — the Axiom recipes rely on `AXIOM_QUERY_TOKEN` exported into the shell, which isn't pre-populated in cloud envs. Ask the user to paste the token (or run the Axiom recipes locally and share the output). The DB recipes (`/api/admin/sql`) DO work from cloud sandboxes since they go through public HTTPS — just have the user paste `ADMIN_QUERY_TOKEN` and `ADMIN_QUERY_URL` into the session env.
+- **Cloud / web-sandbox sessions, Axiom queries** — cloud session envs now inject `AXIOM_QUERY_TOKEN` **and** `AXIOM_ORG_ID` into the shell (verified working out of the box, 2026-08-11 Spotify-export investigation), so run `env | grep AXIOM` before asking the user for anything — the curl recipes below work as-is with `-H "X-AXIOM-ORG-ID: $AXIOM_ORG_ID"`. Only if the vars are genuinely absent, ask the user to paste a PAT (or run the recipes locally and share the output). The DB recipes (`/api/admin/sql`) also work from cloud sandboxes since they go through public HTTPS (`ADMIN_QUERY_TOKEN` is likewise injected).
 
 ## Pre-flight
 
@@ -41,7 +41,7 @@ test -n "$AXIOM_QUERY_TOKEN" && echo "ok" || echo "AXIOM_QUERY_TOKEN missing —
 
 If still unset, ask the user to export it. Never commit it.
 
-The Axiom org id is **autodiscovered** from the token — no hardcoded slug. The query template below resolves it once via `/v1/orgs` and caches it in `$AXIOM_ORG`. (If `$AXIOM_ORG` is already exported, it's used as-is. The env var `AXIOM_ORG_ID` is sometimes confused with the dataset name; do not rely on it.)
+The Axiom org id is **autodiscovered** from the token — no hardcoded slug. The query template below resolves it once via `/v1/orgs` and caches it in `$AXIOM_ORG`. (If `$AXIOM_ORG` is already exported, it's used as-is. In cloud session envs the injected `AXIOM_ORG_ID` **is** the real org slug and works directly as the `X-AXIOM-ORG-ID` header — verified 2026-08-11; historically that var was sometimes set to the dataset name instead, so if a query 403s, fall back to autodiscovery.)
 
 ## Decision tree
 
