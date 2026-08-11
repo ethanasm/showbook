@@ -1,9 +1,53 @@
 import { child } from '@showbook/observability';
+import { isTransientFetchError, transientErrorCode } from './transient-fetch';
 
 const log = child({ component: 'api.spotify', provider: 'spotify' });
 
 const API_BASE = 'https://api.spotify.com/v1';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch with retry on transient transport failures (undici
+ * `TypeError: fetch failed` with ETIMEDOUT/ECONNRESET causes, or an
+ * `AbortSignal.timeout` TimeoutError), mirroring `places.request.retry` /
+ * `wikidata.request.retry`. Each attempt gets its own 10s deadline on a
+ * fresh connection. Logs `spotify.request.retry` (warn) per retry.
+ *
+ * Only used for calls that are safe to repeat: reads via `spotifyFetch`
+ * and the token-endpoint grants (a grant that never reached Spotify —
+ * connect timeouts like the 2026-08-07 hype-playlist failure — is repeat-
+ * safe by construction). Playlist-mutating POSTs (`createPlaylist`,
+ * `addTracksToPlaylist`, `saveTracksToLibrary`, `replacePlaylistItems`)
+ * deliberately do NOT go through this: a request that died mid-flight may
+ * have been applied server-side, and a blind retry would double-create /
+ * double-add.
+ */
+async function fetchWithTransientRetry(
+  url: string,
+  init: RequestInit,
+  call: string,
+  attempts = 3,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
+    } catch (err) {
+      lastErr = err;
+      if (attempt >= attempts || !isTransientFetchError(err)) throw err;
+      log.warn(
+        { event: 'spotify.request.retry', call, code: transientErrorCode(err) },
+        'Transient Spotify network error; retrying',
+      );
+      await sleep(attempt * 300);
+    }
+  }
+  throw lastErr;
+}
 
 /**
  * The complete set of scopes the setlist-intelligence feature needs,
@@ -102,10 +146,11 @@ async function spotifyFetch(
   attempt = 0,
 ): Promise<Response> {
   const startedAt = Date.now();
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(10_000),
-  });
+  const response = await fetchWithTransientRetry(
+    url,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    'spotifyFetch',
+  );
   const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
     if (attempt >= MAX_429_RETRIES) {
@@ -178,19 +223,22 @@ export async function exchangeAuthorizationCode(opts: {
   code: string;
   redirectUri: string;
 }): Promise<SpotifyTokenSet> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: basicAuthHeader(),
+  const res = await fetchWithTransientRetry(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(),
+      },
+      body: new URLSearchParams({
+        code: opts.code,
+        redirect_uri: opts.redirectUri,
+        grant_type: 'authorization_code',
+      }),
     },
-    body: new URLSearchParams({
-      code: opts.code,
-      redirect_uri: opts.redirectUri,
-      grant_type: 'authorization_code',
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
+    'exchangeAuthorizationCode',
+  );
   if (!res.ok) {
     const detail = await res.text();
     throw new SpotifyError(
@@ -225,18 +273,21 @@ export async function exchangeAuthorizationCode(opts: {
 export async function refreshSpotifyToken(
   refreshToken: string,
 ): Promise<SpotifyTokenSet> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: basicAuthHeader(),
+  const res = await fetchWithTransientRetry(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(),
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
     },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
+    'refreshSpotifyToken',
+  );
   if (!res.ok) {
     const detail = await res.text();
     throw new SpotifyError(
@@ -278,15 +329,18 @@ export async function getAppAccessToken(): Promise<string> {
   if (cachedAppToken && cachedAppToken.expiresAt > Date.now()) {
     return cachedAppToken.token;
   }
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: basicAuthHeader(),
+  const res = await fetchWithTransientRetry(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(),
+      },
+      body: new URLSearchParams({ grant_type: 'client_credentials' }),
     },
-    body: new URLSearchParams({ grant_type: 'client_credentials' }),
-    signal: AbortSignal.timeout(10_000),
-  });
+    'getAppAccessToken',
+  );
   if (!res.ok) {
     const detail = await res.text();
     throw new SpotifyError(
