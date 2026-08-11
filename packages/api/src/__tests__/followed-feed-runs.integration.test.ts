@@ -36,6 +36,7 @@ const USER_ID = `${PREFIX}-user`;
 
 const VENUE = fakeUuid(PREFIX, 'venue');
 const ANN_ONGOING_RUN = fakeUuid(PREFIX, 'ongoin');
+const ANN_ONGOING_RUN_B = fakeUuid(PREFIX, 'ongonb');
 const ANN_FINISHED_RUN = fakeUuid(PREFIX, 'finish');
 const ANN_FUTURE_SINGLE = fakeUuid(PREFIX, 'future');
 const ANN_PAST_SINGLE = fakeUuid(PREFIX, 'pastsn');
@@ -69,6 +70,22 @@ describe('discover.followedFeed — multi-night runs', () => {
           runStartDate: dateOffset(-3),
           runEndDate: dateOffset(87),
           performanceDates: [dateOffset(-3), dateOffset(87)],
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+        },
+        {
+          // Second in-progress run: opened 5 days ago, 30 nights left.
+          // Exists so cursor pagination has more than one clamped row
+          // to walk (see the pagination test below).
+          id: ANN_ONGOING_RUN_B,
+          venueId: VENUE,
+          kind: 'theatre',
+          headliner: 'Ongoing Run B',
+          productionName: 'Ongoing Run B',
+          showDate: dateOffset(-5),
+          runStartDate: dateOffset(-5),
+          runEndDate: dateOffset(30),
+          performanceDates: [dateOffset(-5), dateOffset(30)],
           onSaleStatus: 'on_sale',
           source: 'ticketmaster',
         },
@@ -145,5 +162,38 @@ describe('discover.followedFeed — multi-night runs', () => {
       !ids.includes(ANN_PAST_SINGLE),
       'nullable runEndDate must not widen the filter for single-night rows',
     );
+  });
+
+  it('paginates in-progress runs without duplicates, emitting clamped cursors', async () => {
+    // The feed orders by GREATEST(showDate, CURRENT_DATE) and cursors are
+    // emitted in that same clamped space. If a cursor ever carried a run's
+    // raw past first night while the SQL compared clamped dates (or vice
+    // versa), page N+1 would either repeat or skip rows. Walk the feed one
+    // row at a time and assert the union is exact and duplicate-free, and
+    // that no emitted cursor dates a page boundary in the past.
+    const today = new Date().toISOString().slice(0, 10);
+    const caller = callerFor(USER_ID);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let i = 0; i < 10; i++) {
+      const page = await caller.discover.followedFeed({ cursor, limit: 1 });
+      for (const item of page.items) {
+        if (item.id.startsWith(PREFIX)) seen.push(item.id);
+      }
+      if (!page.nextCursor) break;
+      const cursorDate = page.nextCursor.split('|')[0]!;
+      assert.ok(
+        cursorDate >= today,
+        `cursor date ${cursorDate} must not point into the past`,
+      );
+      cursor = page.nextCursor;
+    }
+    const expected = [
+      ANN_ONGOING_RUN,
+      ANN_ONGOING_RUN_B,
+      ANN_FUTURE_SINGLE,
+    ].sort();
+    assert.deepEqual([...seen].sort(), expected, 'exact visible set served');
+    assert.equal(seen.length, new Set(seen).size, 'no duplicates across pages');
   });
 });

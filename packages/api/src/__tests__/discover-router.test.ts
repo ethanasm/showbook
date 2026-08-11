@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import {
   encodeCursor,
   decodeCursor,
+  effectiveShowDate,
   discoverRouter,
 } from '../routers/discover';
 import { makeFakeDb, fakeCtx, type FakeDb } from './_fake-db';
@@ -38,6 +39,22 @@ describe('discover cursor helpers (unit)', () => {
   it('decodeCursor returns null when either part is empty', () => {
     assert.equal(decodeCursor('|abc'), null);
     assert.equal(decodeCursor('2026-01-01|'), null);
+  });
+});
+
+describe('effectiveShowDate (unit)', () => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  it('clamps a past first night to today (in-progress runs sort as today)', () => {
+    assert.equal(effectiveShowDate('2000-01-01'), today);
+  });
+
+  it('passes today through unchanged', () => {
+    assert.equal(effectiveShowDate(today), today);
+  });
+
+  it('passes a future date through unchanged', () => {
+    assert.equal(effectiveShowDate('2999-12-31'), '2999-12-31');
   });
 });
 
