@@ -11,7 +11,6 @@ import assert from 'node:assert/strict';
 import {
   encodeCursor,
   decodeCursor,
-  effectiveShowDate,
   discoverRouter,
 } from '../routers/discover';
 import { makeFakeDb, fakeCtx, type FakeDb } from './_fake-db';
@@ -42,21 +41,10 @@ describe('discover cursor helpers (unit)', () => {
   });
 });
 
-describe('effectiveShowDate (unit)', () => {
-  const today = new Date().toISOString().slice(0, 10);
-
-  it('clamps a past first night to today (in-progress runs sort as today)', () => {
-    assert.equal(effectiveShowDate('2000-01-01'), today);
-  });
-
-  it('passes today through unchanged', () => {
-    assert.equal(effectiveShowDate(today), today);
-  });
-
-  it('passes a future date through unchanged', () => {
-    assert.equal(effectiveShowDate('2999-12-31'), '2999-12-31');
-  });
-});
+// The clamped feed-date expression (`effectiveShowDateSql`) is exercised
+// end-to-end — ordering, cursor emission, and cursor-space consistency —
+// by followed-feed-runs.integration.test.ts; it has no JS twin to unit
+// test (cursors are emitted from the database-computed column).
 
 describe('discoverRouter.searchArtists (unit)', () => {
   it('returns [] when the TM client throws', async () => {

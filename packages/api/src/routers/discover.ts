@@ -61,17 +61,28 @@ export function encodeCursor(showDate: string, id: string): string {
  * top of Discover. Clamping to CURRENT_DATE makes an in-progress run
  * sort with today's events; future rows are unaffected
  * (GREATEST(future, today) = future).
+ *
+ * Cursors are emitted from this same expression *selected as a column*,
+ * never recomputed in JS — the database is the single clock, so a
+ * non-UTC session timezone can't put cursor emission and cursor
+ * comparison a day apart. Known, accepted limits (feeds are consumed as
+ * a single `limit: 100` page by both clients today, so cursors are
+ * emitted but effectively never followed):
+ *  - a pagination session that straddles midnight can re-serve rows
+ *    from the clamped block (duplicates, never skips), because
+ *    CURRENT_DATE advances between pages;
+ *  - GREATEST(..., CURRENT_DATE) is unindexable (CURRENT_DATE is
+ *    STABLE), so the ORDER BY sorts without an index — fine at this
+ *    table's scale (~2.5k rows); revisit as a UNION ALL of the
+ *    in-progress and future halves if it ever shows up in EXPLAIN.
+ *
+ * A function (not a module-level constant) for the same reason as
+ * `stillUpcoming()`: unit suites that `mock.module('@showbook/db')`
+ * import this file with `announcements` undefined, so column access
+ * must stay lazy.
  */
-const effectiveShowDateSql = sql`GREATEST(${announcements.showDate}, CURRENT_DATE)`;
-
-/**
- * JS twin of `effectiveShowDateSql`, used when emitting cursors so the
- * cursor compares in the same clamped space the SQL orders by. Uses the
- * UTC calendar date to match the database's `CURRENT_DATE`.
- */
-export function effectiveShowDate(showDate: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  return showDate < today ? today : showDate;
+function effectiveShowDateSql(): SQL<string> {
+  return sql<string>`GREATEST(${announcements.showDate}, CURRENT_DATE)`;
 }
 
 // In-memory per-user rate limit for refreshNow. Resets on server restart,
@@ -84,9 +95,9 @@ function cursorCondition(cursor: { showDate: string; id: string }) {
   // ORDER BY ASC, ASC. Cursors are emitted in the same clamped space
   // (`effectiveShowDate`), so the comparison is consistent.
   return or(
-    sql`${effectiveShowDateSql} > ${cursor.showDate}`,
+    sql`${effectiveShowDateSql()} > ${cursor.showDate}`,
     and(
-      sql`${effectiveShowDateSql} = ${cursor.showDate}`,
+      sql`${effectiveShowDateSql()} = ${cursor.showDate}`,
       sql`${announcements.id} > ${cursor.id}`,
     ),
   )!;
@@ -160,12 +171,13 @@ export const discoverRouter = router({
           announcement: announcements,
           venue: venues,
           headlinerImageUrl: performers.imageUrl,
+          effectiveShowDate: effectiveShowDateSql(),
         })
         .from(announcements)
         .innerJoin(venues, eq(announcements.venueId, venues.id))
         .leftJoin(performers, eq(announcements.headlinerPerformerId, performers.id))
         .where(and(...conditions))
-        .orderBy(asc(effectiveShowDateSql), asc(announcements.id))
+        .orderBy(asc(effectiveShowDateSql()), asc(announcements.id))
         .limit(limit + 1);
 
       let nextCursor: string | undefined;
@@ -175,10 +187,7 @@ export const discoverRouter = router({
         // strictly-greater, so a cursor at the peeked row would skip it.
         rows.pop();
         const last = rows[rows.length - 1]!;
-        nextCursor = encodeCursor(
-          effectiveShowDate(last.announcement.showDate),
-          last.announcement.id,
-        );
+        nextCursor = encodeCursor(last.effectiveShowDate, last.announcement.id);
       }
 
       const items = rows.map((r) => ({
@@ -310,12 +319,13 @@ export const discoverRouter = router({
           announcement: announcements,
           venue: venues,
           headlinerImageUrl: performers.imageUrl,
+          effectiveShowDate: effectiveShowDateSql(),
         })
         .from(announcements)
         .innerJoin(venues, eq(announcements.venueId, venues.id))
         .leftJoin(performers, eq(announcements.headlinerPerformerId, performers.id))
         .where(and(...conditions))
-        .orderBy(asc(effectiveShowDateSql), asc(announcements.id))
+        .orderBy(asc(effectiveShowDateSql()), asc(announcements.id))
         .limit(limit + 1);
 
       let nextCursor: string | undefined;
@@ -324,10 +334,7 @@ export const discoverRouter = router({
         // emitted row, not the (limit+1)-th, or that row gets skipped.
         rows.pop();
         const last = rows[rows.length - 1]!;
-        nextCursor = encodeCursor(
-          effectiveShowDate(last.announcement.showDate),
-          last.announcement.id,
-        );
+        nextCursor = encodeCursor(last.effectiveShowDate, last.announcement.id);
       }
 
       const items = rows.map((r) => ({
@@ -432,12 +439,13 @@ export const discoverRouter = router({
           announcement: announcements,
           venue: venues,
           headlinerImageUrl: performers.imageUrl,
+          effectiveShowDate: effectiveShowDateSql(),
         })
         .from(announcements)
         .innerJoin(venues, eq(announcements.venueId, venues.id))
         .leftJoin(performers, eq(announcements.headlinerPerformerId, performers.id))
         .where(and(...conditions))
-        .orderBy(asc(effectiveShowDateSql), asc(announcements.id))
+        .orderBy(asc(effectiveShowDateSql()), asc(announcements.id))
         .limit(globalLimit);
 
       function findRegionForVenue(lat: number | null, lng: number | null) {
@@ -487,8 +495,9 @@ export const discoverRouter = router({
       > = [];
 
       // JS-side cursor comparisons run in the same clamped space as the
-      // SQL ordering (see `effectiveShowDate`), so an in-progress run
-      // (past first night) compares as "today" here too.
+      // SQL ordering: each row's `effectiveShowDate` is selected from
+      // the database (never recomputed here), so an in-progress run
+      // (past first night) compares as "today" on both sides.
       function pastCursor(
         regionId: string,
         showDate: string,
@@ -504,7 +513,7 @@ export const discoverRouter = router({
       for (const r of rows) {
         const match = findRegionForVenue(r.venue.latitude, r.venue.longitude);
         if (!match) continue;
-        const effectiveDate = effectiveShowDate(r.announcement.showDate);
+        const effectiveDate = r.effectiveShowDate;
         if (!pastCursor(match.region.id, effectiveDate, r.announcement.id)) {
           continue;
         }

@@ -79,6 +79,7 @@ import { hapticSelection } from '@/lib/haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { trpc, type RouterOutput } from '@/lib/trpc';
 import { useCachedQuery, getCacheOutbox, invalidateDiscoverFeeds } from '@/lib/cache';
+import { filterUpcomingAnnouncements } from '@/lib/discover/upcoming';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { useIngestPolling } from '@/lib/discover/useIngestPolling';
 import {
@@ -475,8 +476,12 @@ export default function DiscoverScreen(): React.JSX.Element {
     </View>
   );
 
+  // Stale-cache guard: the offline-first cache can serve a weeks-old
+  // payload (e.g. an expired session silently 401-ing every refetch),
+  // so re-apply the server's upcoming window client-side before
+  // anything derives from the rows — list, chip counts, header count.
   const items = React.useMemo(
-    () => activeQuery.data?.items ?? [],
+    () => filterUpcomingAnnouncements(activeQuery.data?.items ?? []),
     [activeQuery.data?.items],
   );
   const nearbyHasRegions =
