@@ -4,3 +4,4 @@ export * from './badge-resolver';
 export * from './spotify-deep-link';
 export * from './preview-player';
 export * from './festival-lineup-order';
+export * from './playlist-export-failure';

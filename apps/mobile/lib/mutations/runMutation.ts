@@ -8,8 +8,10 @@
  *   4. Fire the network call.
  *   5a. Success → drop the outbox row, run `reconcile` so the cache picks
  *       up the canonical server payload.
- *   5b. Failure → restore the snapshot, leave the outbox row in place
- *       with `attempts++` so a future sweep can retry it.
+ *   5b. Failure → restore the snapshot, then either leave the outbox row
+ *       in place with `attempts++` so a future sweep can retry it, or —
+ *       when `dropOnFailure` classifies the error as terminal — drop the
+ *       row so an unreplayable write doesn't linger in the drawer.
  *
  * Every dependency is injected so the runner is unit-testable without
  * React Native, expo-sqlite, or a live tRPC client.
@@ -34,6 +36,16 @@ export interface MutationContext<TInput, TSnapshot, TResult> {
   reconcile?: (result: TResult, input: TInput) => void;
   /** Stable id for the pending row — tests pass one in. */
   pendingId?: string;
+  /**
+   * When provided and it returns true for the failure, the pending
+   * outbox row is DROPPED instead of retained. Use for terminal
+   * rejections (expired session, missing scopes, validation errors)
+   * that would fail identically on every replay — retaining those
+   * leaves a zombie row in the pending-writes drawer that can never
+   * succeed. Transport failures should return false so the offline
+   * replay keeps working. The original error is re-thrown either way.
+   */
+  dropOnFailure?: (err: unknown) => boolean;
 }
 
 export interface MutationResult<TResult> {
@@ -67,8 +79,22 @@ export async function runOptimisticMutation<TInput, TSnapshot, TResult>(
     if (hasOptimistic) {
       ctx.optimistic!.rollback(snapshot as TSnapshot);
     }
-    const message = err instanceof Error ? err.message : String(err);
-    await ctx.outbox.recordFailure(pending.id, message);
+    // A throwing classifier must never mask the original error or skip
+    // the outbox bookkeeping — treat it as "keep the row".
+    let drop = false;
+    if (ctx.dropOnFailure) {
+      try {
+        drop = ctx.dropOnFailure(err);
+      } catch {
+        drop = false;
+      }
+    }
+    if (drop) {
+      await ctx.outbox.drop(pending.id);
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      await ctx.outbox.recordFailure(pending.id, message);
+    }
     throw err;
   }
 }

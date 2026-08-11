@@ -1,9 +1,81 @@
 import { child } from '@showbook/observability';
+import { isTransientFetchError, transientErrorCode } from './transient-fetch';
 
 const log = child({ component: 'api.spotify', provider: 'spotify' });
 
 const API_BASE = 'https://api.spotify.com/v1';
 const TOKEN_URL = 'https://accounts.spotify.com/api/token';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Total wall-clock budget for one logical Spotify call, shared across
+ * BOTH retry layers (the transport retries below and `spotifyFetch`'s
+ * 429 loop). Without a shared deadline the layers multiply: 6 × 429
+ * attempts × 3 transport attempts could hold a single read for well
+ * over three minutes — exactly the unbounded-single-iteration failure
+ * mode that `MAX_429_RETRIES` was added to stop for the batch crons
+ * (whose wall-clock budgets only check *between* items). Once the
+ * deadline passes, no further retry of either kind is attempted; the
+ * in-flight attempt's own 10s `AbortSignal.timeout` still applies, so
+ * a call is bounded at roughly the budget plus one attempt.
+ */
+const SPOTIFY_CALL_BUDGET_MS = 60_000;
+
+/**
+ * Fetch with retry on transient transport failures (undici
+ * `TypeError: fetch failed` with ETIMEDOUT/ECONNRESET causes, or an
+ * `AbortSignal.timeout` TimeoutError), mirroring `places.request.retry` /
+ * `wikidata.request.retry`. Each attempt gets its own 10s deadline on a
+ * fresh connection (any caller-supplied `init.signal` is replaced by that
+ * per-attempt timeout — no current caller passes one). Logs
+ * `spotify.request.retry` (warn) per retry.
+ *
+ * Retry scope, honestly stated: connect-phase failures (ETIMEDOUT /
+ * ECONNREFUSED / DNS — the request never reached Spotify, like the
+ * 2026-08-07 hype-playlist failure) are always repeat-safe. Mid-flight
+ * losses (ECONNRESET / a TimeoutError after the request was sent) are
+ * retried too, which for the token grants can re-send a grant Spotify
+ * already processed; the refresh and client-credentials grants tolerate
+ * that (the response carries `refresh_token ?? input`, and a re-used
+ * auth code fails with the same terminal 400 the un-retried call would
+ * have surfaced). Playlist-mutating POSTs (`createPlaylist`,
+ * `addTracksToPlaylist`, `saveTracksToLibrary`, `replacePlaylistItems`)
+ * deliberately do NOT go through this: a request that died mid-flight may
+ * have been applied server-side, and a blind retry would double-create /
+ * double-add.
+ */
+async function fetchWithTransientRetry(
+  url: string,
+  init: RequestInit,
+  call: string,
+  attempts = 3,
+  deadlineAt = Date.now() + SPOTIFY_CALL_BUDGET_MS,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
+    } catch (err) {
+      lastErr = err;
+      if (
+        attempt >= attempts ||
+        !isTransientFetchError(err) ||
+        Date.now() >= deadlineAt
+      ) {
+        throw err;
+      }
+      log.warn(
+        { event: 'spotify.request.retry', call, code: transientErrorCode(err) },
+        'Transient Spotify network error; retrying',
+      );
+      await sleep(attempt * 300);
+    }
+  }
+  throw lastErr;
+}
 
 /**
  * The complete set of scopes the setlist-intelligence feature needs,
@@ -100,15 +172,21 @@ async function spotifyFetch(
   url: string,
   accessToken: string,
   attempt = 0,
+  deadlineAt = Date.now() + SPOTIFY_CALL_BUDGET_MS,
 ): Promise<Response> {
   const startedAt = Date.now();
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    signal: AbortSignal.timeout(10_000),
-  });
+  const response = await fetchWithTransientRetry(
+    url,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    'spotifyFetch',
+    3,
+    deadlineAt,
+  );
   const durationMs = Date.now() - startedAt;
   if (response.status === 429) {
-    if (attempt >= MAX_429_RETRIES) {
+    // Both the per-layer attempt cap AND the shared wall-clock budget
+    // bound the loop — see SPOTIFY_CALL_BUDGET_MS.
+    if (attempt >= MAX_429_RETRIES || Date.now() >= deadlineAt) {
       log.warn(
         { event: 'spotify.request.rate_limited_exhausted', attempt, durationMs },
         'Spotify 429 retry budget exhausted',
@@ -126,7 +204,7 @@ async function spotifyFetch(
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(retryAfter, 5) * 1000),
     );
-    return spotifyFetch(url, accessToken, attempt + 1);
+    return spotifyFetch(url, accessToken, attempt + 1, deadlineAt);
   }
   if (!response.ok) {
     log.warn(
@@ -178,19 +256,22 @@ export async function exchangeAuthorizationCode(opts: {
   code: string;
   redirectUri: string;
 }): Promise<SpotifyTokenSet> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: basicAuthHeader(),
+  const res = await fetchWithTransientRetry(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(),
+      },
+      body: new URLSearchParams({
+        code: opts.code,
+        redirect_uri: opts.redirectUri,
+        grant_type: 'authorization_code',
+      }),
     },
-    body: new URLSearchParams({
-      code: opts.code,
-      redirect_uri: opts.redirectUri,
-      grant_type: 'authorization_code',
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
+    'exchangeAuthorizationCode',
+  );
   if (!res.ok) {
     const detail = await res.text();
     throw new SpotifyError(
@@ -225,18 +306,21 @@ export async function exchangeAuthorizationCode(opts: {
 export async function refreshSpotifyToken(
   refreshToken: string,
 ): Promise<SpotifyTokenSet> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: basicAuthHeader(),
+  const res = await fetchWithTransientRetry(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(),
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
     },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
+    'refreshSpotifyToken',
+  );
   if (!res.ok) {
     const detail = await res.text();
     throw new SpotifyError(
@@ -278,15 +362,18 @@ export async function getAppAccessToken(): Promise<string> {
   if (cachedAppToken && cachedAppToken.expiresAt > Date.now()) {
     return cachedAppToken.token;
   }
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: basicAuthHeader(),
+  const res = await fetchWithTransientRetry(
+    TOKEN_URL,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: basicAuthHeader(),
+      },
+      body: new URLSearchParams({ grant_type: 'client_credentials' }),
     },
-    body: new URLSearchParams({ grant_type: 'client_credentials' }),
-    signal: AbortSignal.timeout(10_000),
-  });
+    'getAppAccessToken',
+  );
   if (!res.ok) {
     const detail = await res.text();
     throw new SpotifyError(

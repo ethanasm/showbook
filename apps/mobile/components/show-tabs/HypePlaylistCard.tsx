@@ -26,7 +26,7 @@ import { trpc } from '@/lib/trpc';
 import { useNetwork } from '@/lib/network';
 import { useSpotifyConnection } from '@/lib/spotify-connection';
 import { SpotifyConnectSheet } from '../SpotifyConnectSheet';
-import { buildSpotifyOpenPlan } from '@/lib/setlist-intel';
+import { buildSpotifyOpenPlan, describePlaylistExportFailure } from '@/lib/setlist-intel';
 import { useQueryClient } from '@tanstack/react-query';
 import { runOptimisticMutation } from '@/lib/mutations';
 import { getCacheOutbox } from '@/lib/cache/db';
@@ -148,9 +148,21 @@ export function HypePlaylistCard({
             queryClient.setQueryData<Cache>(existingKey, sentinel);
           },
           rollback: (snap) => {
-            queryClient.setQueryData<Cache>(existingKey, snap);
+            // `setQueryData(key, undefined)` is a documented React Query
+            // no-op, so a bare `snap` left the "Queued" sentinel stuck
+            // (card disabled forever) whenever the pre-mutation cache was
+            // empty — e.g. the existingPlaylist query itself failed while
+            // the session was expired. Coalesce to `null`, the server's
+            // "no playlist yet" shape, so rollback always clears it.
+            queryClient.setQueryData<Cache>(existingKey, snap ?? null);
           },
         },
+        // Terminal rejections (expired session, missing scopes, empty
+        // setlist, …) would fail identically on replay — don't leave
+        // them queued. Transport failures stay queued for the reconnect
+        // replay.
+        dropOnFailure: (err) =>
+          !describePlaylistExportFailure(err, network.online).keepQueued,
         reconcile: () => {
           void utils.spotify.existingPlaylist.invalidate({ showId, kind, performerId });
         },
@@ -164,31 +176,17 @@ export function HypePlaylistCard({
           : `Created — ${made} song${made === 1 ? '' : 's'} on Spotify`,
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed';
-      if (msg.includes('spotify_scopes_missing:')) {
-        setStatusMsg(
-          'Spotify needs an updated permission. Reconnect from Preferences.',
-        );
-        return;
+      const plan = describePlaylistExportFailure(err, network.online);
+      if (plan.keepQueued) {
+        // The outbox row survives for the reconnect replay, so show the
+        // queued affordance deliberately: re-apply the sentinel AFTER the
+        // runner's rollback so the card reads "Queued — …" and stays
+        // disabled instead of inviting a second tap (= a second outbox
+        // row). The replay dispatcher invalidates `spotify.existingPlaylist`
+        // when the row settles, which clears or replaces the sentinel.
+        queryClient.setQueryData<Cache>(existingKey, sentinel);
       }
-      if (msg.includes('spotify_not_connected')) {
-        setStatusMsg('Connect Spotify to create this playlist.');
-        return;
-      }
-      if (msg.includes('prediction_cold') || msg.includes('prediction_empty')) {
-        setStatusMsg('Not enough setlist data yet — try again closer to the show.');
-        return;
-      }
-      if (msg.includes('setlist_empty')) {
-        setStatusMsg('No setlist on file yet — add songs from the Edit panel.');
-        return;
-      }
-      // Offline / 5xx — the row is in the outbox, so this isn't lost.
-      if (!network.online) {
-        setStatusMsg("Queued — we'll create it on Spotify when you're back online.");
-        return;
-      }
-      setStatusMsg('Spotify export failed. Try again in a moment.');
+      setStatusMsg(plan.message);
     } finally {
       setIsCreating(false);
     }

@@ -247,9 +247,22 @@ function OfflineBridge({ children }: { children: React.ReactNode }): React.JSX.E
         case 'preferences.toggleRegion':
           return c.preferences.toggleRegion.mutate(payload);
         case 'spotify.createHypePlaylist':
-          return c.spotify.createHypePlaylist.mutate(payload);
         case 'spotify.createHeardPlaylist':
-          return c.spotify.createHeardPlaylist.mutate(payload);
+          // The card parks a `pending: true` sentinel in the
+          // `spotify.existingPlaylist` cache while the row waits in the
+          // outbox (and the cache persister carries it across restarts).
+          // Replay is the only path that settles the row, so reconcile
+          // here: on success the refetch swaps the sentinel for the real
+          // playlist; on a terminal failure it clears the sentinel so the
+          // card unlocks for a manual retry (offline refetches no-op, so
+          // a still-queued row keeps its queued card).
+          try {
+            return m === 'spotify.createHypePlaylist'
+              ? await c.spotify.createHypePlaylist.mutate(payload)
+              : await c.spotify.createHeardPlaylist.mutate(payload);
+          } finally {
+            void utils.spotify.existingPlaylist.invalidate();
+          }
         case 'discover.watchlist':
           // The server 409s when a show + link already exist; swallow so
           // a queued tap from a different device doesn't stick forever.

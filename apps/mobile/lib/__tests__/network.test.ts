@@ -34,6 +34,7 @@ import {
   NetworkProvider,
   OfflineSyncProvider,
   useNetwork,
+  classifyError,
   deriveNetworkState,
   __resetReplayInFlightForTest,
   __setNetInfoSourceForTest,
@@ -442,6 +443,27 @@ function fakeOutbox(initial: PendingWrite[] = []): Outbox & {
   };
   return ob;
 }
+
+describe('classifyError', () => {
+  it('agrees with the query retry policy on retryable statuses', () => {
+    // Transient: no response at all, 5xx, and the 408/425/429 set shared
+    // with RETRYABLE_HTTP_STATUSES in lib/trpc-retry.ts.
+    assert.equal(classifyError(new Error('fetch failed')).transient, true);
+    for (const httpStatus of [500, 502, 503, 504, 408, 425, 429]) {
+      const err = Object.assign(new Error(String(httpStatus)), {
+        data: { httpStatus },
+      });
+      assert.equal(classifyError(err).transient, true, `status ${httpStatus}`);
+    }
+    // Terminal: real client rejections must not burn replay backoff.
+    for (const httpStatus of [400, 401, 403, 404, 409, 422]) {
+      const err = Object.assign(new Error(String(httpStatus)), {
+        data: { httpStatus },
+      });
+      assert.equal(classifyError(err).transient, false, `status ${httpStatus}`);
+    }
+  });
+});
 
 describe('OfflineSyncProvider replay-on-mount', () => {
   beforeEach(() => {

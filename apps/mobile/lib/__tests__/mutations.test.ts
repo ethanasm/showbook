@@ -151,6 +151,93 @@ describe('runOptimisticMutation', () => {
     assert.equal(row?.last_error, 'boom');
   });
 
+  it('drops the outbox row when dropOnFailure classifies the error as terminal', async () => {
+    const { db, rows } = fakeDb();
+    const outbox = createOutbox(db);
+    const cache: TestState = { notes: 'snap' };
+    const seen: unknown[] = [];
+
+    await assert.rejects(
+      runOptimisticMutation<{ notes: string }, TestState, never>({
+        mutation: 'spotify.createHypePlaylist',
+        pendingId: 'pw-terminal',
+        input: { notes: 'patched' },
+        outbox,
+        call: async () => {
+          throw new Error('UNAUTHORIZED');
+        },
+        dropOnFailure: (err) => {
+          seen.push(err);
+          return true;
+        },
+        optimistic: {
+          snapshot: () => ({ notes: cache.notes }),
+          apply: (input) => {
+            cache.notes = input.notes;
+          },
+          rollback: (snap) => {
+            cache.notes = snap.notes;
+          },
+        },
+      }),
+      /UNAUTHORIZED/,
+    );
+
+    // Cache still rolled back, but no zombie row survives for the replay.
+    assert.equal(cache.notes, 'snap');
+    assert.equal(rows.size, 0);
+    assert.equal(seen.length, 1);
+    assert.ok(seen[0] instanceof Error);
+  });
+
+  it('keeps the row and rethrows the original error when dropOnFailure throws', async () => {
+    const { db, rows } = fakeDb();
+    const outbox = createOutbox(db);
+
+    await assert.rejects(
+      runOptimisticMutation<{ x: number }, never, never>({
+        mutation: 'spotify.createHypePlaylist',
+        pendingId: 'pw-classifier-throw',
+        input: { x: 1 },
+        outbox,
+        call: async () => {
+          throw new Error('original failure');
+        },
+        dropOnFailure: () => {
+          throw new Error('classifier blew up');
+        },
+      }),
+      /original failure/,
+    );
+
+    const row = rows.get('pw-classifier-throw');
+    assert.equal(row?.attempts, 1);
+    assert.equal(row?.last_error, 'original failure');
+  });
+
+  it('keeps the outbox row when dropOnFailure returns false', async () => {
+    const { db, rows } = fakeDb();
+    const outbox = createOutbox(db);
+
+    await assert.rejects(
+      runOptimisticMutation<{ x: number }, never, never>({
+        mutation: 'spotify.createHypePlaylist',
+        pendingId: 'pw-transient',
+        input: { x: 1 },
+        outbox,
+        call: async () => {
+          throw new Error('fetch failed');
+        },
+        dropOnFailure: () => false,
+      }),
+      /fetch failed/,
+    );
+
+    const row = rows.get('pw-transient');
+    assert.equal(row?.attempts, 1);
+    assert.equal(row?.last_error, 'fetch failed');
+  });
+
   it('returns the network result and the pending id', async () => {
     const { db } = fakeDb();
     const outbox = createOutbox(db);

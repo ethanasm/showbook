@@ -75,6 +75,12 @@
     "typescript": "~6.0.3"
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-w3rx-r6r6-pgpr",
+        "GHSA-5p2g-fcmc-qvqq"
+      ]
+    },
     "overrides": {
       "fast-xml-parser@<5.7.0": "^5.7.0",
       "postcss@<8.5.23": "^8.5.23",

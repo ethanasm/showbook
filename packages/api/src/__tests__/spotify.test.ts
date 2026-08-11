@@ -9,6 +9,7 @@ import {
   SpotifyError,
   getArtistAlbums,
   getFollowedArtists,
+  refreshSpotifyToken,
   searchSpotifyArtist,
 } from '../spotify';
 
@@ -282,5 +283,89 @@ describe('searchSpotifyArtist', () => {
       assert.equal((err as SpotifyError).status, 500);
       return true;
     });
+  });
+});
+
+// -----------------------------------------------------------------------
+// Transient-transport retry (spotify.request.retry). The 2026-08-07
+// hype-playlist failure was a single connect-phase ETIMEDOUT on the token
+// refresh aborting the whole export — a retry on a fresh connection
+// clears it, mirroring places/wikidata/setlistfm.
+// -----------------------------------------------------------------------
+
+function transientFetchError(): TypeError {
+  return Object.assign(new TypeError('fetch failed'), {
+    cause: Object.assign(new Error('connect ETIMEDOUT'), { code: 'ETIMEDOUT' }),
+  });
+}
+
+describe('transient network retry', () => {
+  it('retries a read after a transient transport failure', async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      if (calls === 1) throw transientFetchError();
+      return jsonResponse({
+        artists: { items: [{ id: 'a1', name: 'Big Thief', images: [], genres: [] }] },
+      });
+    }) as typeof globalThis.fetch;
+
+    const result = await searchSpotifyArtist('token', 'Big Thief');
+    assert.equal(result?.id, 'a1');
+    assert.equal(calls, 2, 'first attempt failed, second succeeded');
+  });
+
+  it('retries the token refresh after a transient transport failure', async () => {
+    const origId = process.env.SPOTIFY_CLIENT_ID;
+    const origSecret = process.env.SPOTIFY_CLIENT_SECRET;
+    process.env.SPOTIFY_CLIENT_ID = 'test-client';
+    process.env.SPOTIFY_CLIENT_SECRET = 'test-secret';
+    try {
+      let calls = 0;
+      globalThis.fetch = (async () => {
+        calls += 1;
+        if (calls === 1) throw transientFetchError();
+        return jsonResponse({
+          access_token: 'fresh',
+          expires_in: 3600,
+          scope: 'user-top-read',
+          token_type: 'Bearer',
+        });
+      }) as typeof globalThis.fetch;
+
+      const tokens = await refreshSpotifyToken('refresh-token');
+      assert.equal(tokens.accessToken, 'fresh');
+      // Spotify omitted refresh_token on the refresh grant — keep the input.
+      assert.equal(tokens.refreshToken, 'refresh-token');
+      assert.equal(calls, 2);
+    } finally {
+      process.env.SPOTIFY_CLIENT_ID = origId;
+      process.env.SPOTIFY_CLIENT_SECRET = origSecret;
+    }
+  });
+
+  it('does not retry a non-transient throw', async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      throw new Error('programming error');
+    }) as typeof globalThis.fetch;
+
+    await assert.rejects(searchSpotifyArtist('token', 'Whoever'), /programming error/);
+    assert.equal(calls, 1, 'non-transient errors must not be retried');
+  });
+
+  it('gives up after exhausting the retry budget', async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      throw transientFetchError();
+    }) as typeof globalThis.fetch;
+
+    await assert.rejects(
+      searchSpotifyArtist('token', 'Whoever'),
+      (err: unknown) => err instanceof TypeError,
+    );
+    assert.equal(calls, 3, 'three attempts total');
   });
 });

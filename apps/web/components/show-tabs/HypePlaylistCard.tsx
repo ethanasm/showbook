@@ -150,6 +150,15 @@ export function HypePlaylistCard({
         setStatusMsg("No setlist on file yet — add songs from the Edit panel.");
         return;
       }
+      // Mirrors the mobile card's session-expired classification
+      // (`describePlaylistExportFailure`) — a dead session used to show
+      // the generic retry copy, which retrying can't fix.
+      const code = (err as { data?: { code?: string; httpStatus?: number } })
+        ?.data;
+      if (code?.code === "UNAUTHORIZED" || code?.httpStatus === 401) {
+        setStatusMsg("Session expired — sign in again to export.");
+        return;
+      }
       setStatusMsg("Spotify export failed. Try again in a moment.");
     }
   }, [kind, createHype, createHeard, showId, performerId]);
