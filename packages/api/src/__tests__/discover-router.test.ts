@@ -41,6 +41,11 @@ describe('discover cursor helpers (unit)', () => {
   });
 });
 
+// The clamped feed-date expression (`effectiveShowDateSql`) is exercised
+// end-to-end — ordering, cursor emission, and cursor-space consistency —
+// by followed-feed-runs.integration.test.ts; it has no JS twin to unit
+// test (cursors are emitted from the database-computed column).
+
 describe('discoverRouter.searchArtists (unit)', () => {
   it('returns [] when the TM client throws', async () => {
     const origFetch = globalThis.fetch;

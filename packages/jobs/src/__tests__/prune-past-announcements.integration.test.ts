@@ -1,6 +1,7 @@
 /**
  * Integration tests for runPrunePastAnnouncements: the daily cron at
- * 02:00 ET that drops announcements whose showDate is before today.
+ * 02:00 ET that drops announcements whose last performance
+ * (`COALESCE(run_end_date, show_date)`) is before today.
  *
  * Concurrency note: node:test runs integration test FILES in parallel,
  * so `runPruneOrphanCatalog()` from a sibling test file can fire mid-
@@ -42,6 +43,8 @@ const ANN_TODAY = `${PREFIX}-f000-4f00-8f00-f00000000002`;
 const ANN_FUTURE = `${PREFIX}-f000-4f00-8f00-f00000000003`;
 const ANN_PAST_LINKED = `${PREFIX}-f000-4f00-8f00-f00000000004`;
 const ANN_PAST_FOLLOWED_PERFORMER = `${PREFIX}-f000-4f00-8f00-f00000000005`;
+const ANN_ONGOING_RUN = `${PREFIX}-f000-4f00-8f00-f00000000006`;
+const ANN_FINISHED_RUN = `${PREFIX}-f000-4f00-8f00-f00000000007`;
 
 function offsetDate(days: number): string {
   const d = new Date();
@@ -127,6 +130,70 @@ describe('runPrunePastAnnouncements', () => {
     assert.equal(past.length, 0, 'past announcement deleted');
     assert.equal(today.length, 1, 'today announcement preserved');
     assert.equal(future.length, 1, 'future announcement preserved');
+  });
+
+  it('keeps an in-progress multi-night run but drops a finished one', async () => {
+    // `showDate` is a run's FIRST night. The original predicate
+    // (`show_date < CURRENT_DATE`) deleted a Hamilton-style run the
+    // morning after opening night, with the rest of the engagement
+    // still to come — undoing the discover read-path fix that keeps
+    // in-progress runs visible (`stillUpcoming()`).
+    await db.transaction(async (tx) => {
+      await tx.insert(users).values([
+        { id: USER_A, name: 'A', email: 'a@test.local' },
+      ]);
+      await tx.insert(venues).values([
+        { id: VENUE, name: 'Hall', city: 'NYC', country: 'US' },
+      ]);
+      await tx.insert(userVenueFollows).values([
+        { userId: USER_A, venueId: VENUE },
+      ]);
+      await tx.insert(announcements).values([
+        {
+          // Opened 3 days ago, runs for another 87 — must survive.
+          id: ANN_ONGOING_RUN,
+          venueId: VENUE,
+          kind: 'theatre',
+          headliner: 'Ongoing Run',
+          productionName: 'Ongoing Run',
+          showDate: offsetDate(-3),
+          runStartDate: offsetDate(-3),
+          runEndDate: offsetDate(87),
+          performanceDates: [offsetDate(-3), offsetDate(87)],
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-ongoing-run`,
+        },
+        {
+          // Closed 10 days ago — must be deleted.
+          id: ANN_FINISHED_RUN,
+          venueId: VENUE,
+          kind: 'theatre',
+          headliner: 'Finished Run',
+          productionName: 'Finished Run',
+          showDate: offsetDate(-60),
+          runStartDate: offsetDate(-60),
+          runEndDate: offsetDate(-10),
+          performanceDates: [offsetDate(-60), offsetDate(-10)],
+          onSaleStatus: 'on_sale',
+          source: 'ticketmaster',
+          sourceEventId: `${PREFIX}-finished-run`,
+        },
+      ]);
+    });
+
+    await runPrunePastAnnouncements();
+
+    const ongoing = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.id, ANN_ONGOING_RUN));
+    const finished = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.id, ANN_FINISHED_RUN));
+    assert.equal(ongoing.length, 1, 'in-progress run preserved mid-engagement');
+    assert.equal(finished.length, 0, 'finished run deleted');
   });
 
   it('drops past announcements even when a followed performer would otherwise preserve them', async () => {

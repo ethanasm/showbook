@@ -56,6 +56,7 @@ import { RADII } from '@/lib/theme-utils';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/lib/auth';
 import { useCachedQuery } from '@/lib/cache';
+import { isStillUpcoming } from '@/lib/discover/upcoming';
 import { WATCHED_IDS_CACHE_KEY, useToggleWatch } from '@/lib/discover-watch';
 import darkStyle from './map-style-dark.json';
 import lightStyle from './map-style-light.json';
@@ -522,7 +523,12 @@ export default function MapScreen(): React.JSX.Element {
     [showsQuery.data],
   );
   const discoverableShows = React.useMemo(
-    () => (mapFeedQuery.data ?? []) as MapShow[],
+    // Stale-cache guard (mirrors the Discover tab): a stale offline
+    // cache must not draw pins for announcements whose run has ended.
+    () =>
+      ((mapFeedQuery.data ?? []) as MapShow[]).filter((r) =>
+        isStillUpcoming(r.date, r.runEndDate ?? null),
+      ),
     [mapFeedQuery.data],
   );
 
