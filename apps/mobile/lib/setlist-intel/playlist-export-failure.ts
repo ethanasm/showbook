@@ -61,7 +61,10 @@ export function describePlaylistExportFailure(
   }
   if (isUnauthorizedError(err)) {
     // Same copy as the global session-expired banner / pull-to-refresh
-    // toast so the states read as one condition.
+    // toast so the states read as one condition. Dropping the row does
+    // not lose anything the offline contract would have kept: the only
+    // recovery from an expired session is sign-out → sign-in, and
+    // sign-out's cache cleanup deletes the outbox database anyway.
     return {
       message: 'Session expired — sign in again to sync.',
       keepQueued: false,

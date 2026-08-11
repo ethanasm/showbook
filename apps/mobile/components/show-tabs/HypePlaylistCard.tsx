@@ -176,7 +176,17 @@ export function HypePlaylistCard({
           : `Created — ${made} song${made === 1 ? '' : 's'} on Spotify`,
       );
     } catch (err) {
-      setStatusMsg(describePlaylistExportFailure(err, network.online).message);
+      const plan = describePlaylistExportFailure(err, network.online);
+      if (plan.keepQueued) {
+        // The outbox row survives for the reconnect replay, so show the
+        // queued affordance deliberately: re-apply the sentinel AFTER the
+        // runner's rollback so the card reads "Queued — …" and stays
+        // disabled instead of inviting a second tap (= a second outbox
+        // row). The replay dispatcher invalidates `spotify.existingPlaylist`
+        // when the row settles, which clears or replaces the sentinel.
+        queryClient.setQueryData<Cache>(existingKey, sentinel);
+      }
+      setStatusMsg(plan.message);
     } finally {
       setIsCreating(false);
     }

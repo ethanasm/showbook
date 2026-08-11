@@ -190,6 +190,31 @@ describe('runOptimisticMutation', () => {
     assert.ok(seen[0] instanceof Error);
   });
 
+  it('keeps the row and rethrows the original error when dropOnFailure throws', async () => {
+    const { db, rows } = fakeDb();
+    const outbox = createOutbox(db);
+
+    await assert.rejects(
+      runOptimisticMutation<{ x: number }, never, never>({
+        mutation: 'spotify.createHypePlaylist',
+        pendingId: 'pw-classifier-throw',
+        input: { x: 1 },
+        outbox,
+        call: async () => {
+          throw new Error('original failure');
+        },
+        dropOnFailure: () => {
+          throw new Error('classifier blew up');
+        },
+      }),
+      /original failure/,
+    );
+
+    const row = rows.get('pw-classifier-throw');
+    assert.equal(row?.attempts, 1);
+    assert.equal(row?.last_error, 'original failure');
+  });
+
   it('keeps the outbox row when dropOnFailure returns false', async () => {
     const { db, rows } = fakeDb();
     const outbox = createOutbox(db);

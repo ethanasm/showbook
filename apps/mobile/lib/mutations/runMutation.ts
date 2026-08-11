@@ -79,7 +79,17 @@ export async function runOptimisticMutation<TInput, TSnapshot, TResult>(
     if (hasOptimistic) {
       ctx.optimistic!.rollback(snapshot as TSnapshot);
     }
-    if (ctx.dropOnFailure?.(err)) {
+    // A throwing classifier must never mask the original error or skip
+    // the outbox bookkeeping — treat it as "keep the row".
+    let drop = false;
+    if (ctx.dropOnFailure) {
+      try {
+        drop = ctx.dropOnFailure(err);
+      } catch {
+        drop = false;
+      }
+    }
+    if (drop) {
       await ctx.outbox.drop(pending.id);
     } else {
       const message = err instanceof Error ? err.message : String(err);

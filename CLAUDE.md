@@ -224,6 +224,10 @@ has no tunnel ingress at all.
   nothing checked. A transitive advisory that can't be resolved by bumping the
   direct dependency goes in the `pnpm.overrides` block in the root
   `package.json`, so the exception is recorded rather than silently tolerated.
+  An advisory with **no patched release at all** (an override can't fix it —
+  e.g. the 2026-08 `image-size` DoS pair under metro) is recorded in
+  `pnpm.auditConfig.ignoreGhsas` instead, with the justification in the commit
+  that adds it; drop the entry once upstream ships a fix.
 - `pnpm verify:e2e` — adds Playwright e2e (or set `RUN_E2E=1`)
 - `pnpm verify:coverage` — build + lint + typecheck + unit + integration with
   merged Node native code coverage; **fails if any of lines / branches /

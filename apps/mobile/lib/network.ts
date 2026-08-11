@@ -379,7 +379,16 @@ interface ClassifiedError {
   message: string;
 }
 
-function classifyError(err: unknown): ClassifiedError {
+/**
+ * Retryable non-5xx statuses — kept in lockstep with
+ * `RETRYABLE_HTTP_STATUSES` in `lib/trpc-retry.ts` so the replay loop
+ * and the query retry policy agree on what "transient" means (a 429'd
+ * queued write should back off and retry here exactly like a 429'd
+ * query does there).
+ */
+const RETRYABLE_REPLAY_STATUSES = new Set([408, 425, 429]);
+
+export function classifyError(err: unknown): ClassifiedError {
   const e = err as {
     data?: { httpStatus?: number };
     status?: number;
@@ -392,7 +401,8 @@ function classifyError(err: unknown): ClassifiedError {
     e?.cause?.status ??
     0;
   // Status 0 = network error (no response at all). Treat as transient.
-  const transient = status === 0 || status >= 500;
+  const transient =
+    status === 0 || status >= 500 || RETRYABLE_REPLAY_STATUSES.has(status);
   const message = err instanceof Error ? err.message : String((e?.message ?? err) ?? 'unknown');
   return { status, transient, message };
 }
