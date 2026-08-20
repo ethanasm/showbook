@@ -389,44 +389,34 @@ export async function GET(request: Request) {
       const irvingPlazaId = venueMap.get('Irving Plaza');
       const comedyCellarId = venueMap.get('The Comedy Cellar');
 
-      // Announcement dates are relative to today, for the same reason the
-      // Hamilton run above is: the Discover feed filters
-      // `showDate >= CURRENT_DATE OR runEndDate >= CURRENT_DATE`
-      // (packages/api/src/routers/discover.ts), so any hardcoded date silently
-      // drops out of every feed the moment it elapses. That is exactly what
-      // happened to the two rows carrying a `ticketUrl` — dated 2026-08-15 and
-      // 2026-07-22 — which left
-      // `discover-kind-alignment.spec.ts`'s "seed should include a row with a
-      // ticket link" permanently red from 2026-08-16 onward.
-      //
-      // The offsets preserve the original ordering and spacing of the set,
-      // anchored so the earliest row sits a few days out.
-      const daysOut = (n: number): string => {
-        const d = new Date();
-        d.setUTCHours(0, 0, 0, 0);
-        d.setUTCDate(d.getUTCDate() + n);
-        return d.toISOString().slice(0, 10);
-      };
-      const onDay = (n: number) => {
-        const date = daysOut(n);
-        return {
-          showDate: date,
-          runStartDate: date,
-          runEndDate: date,
-          performanceDates: [date],
-        };
-      };
+      // Single-night announcements are anchored to `fromNow()` for the same
+      // reason the Hamilton run above is: every discover feed filters on
+      // `showDate >= CURRENT_DATE OR runEndDate >= CURRENT_DATE`, so a
+      // hardcoded date drops the row out of the feed the day after it passes.
+      // Bon Iver ('2026-08-15') and Alvvays ('2026-07-22') were the only two
+      // rows carrying a ticketUrl, and when they elapsed the kind-alignment
+      // spec lost its "row with a ticket link" and went permanently red.
+      // Each date is bound once so the four date fields can't disagree if the
+      // seed runs across midnight. Offsets keep the original relative order.
+      const alvvaysDate = fromNow(7);
+      const meghanDate = fromNow(14);
+      const bonIverDate = fromNow(18);
+      const fleetFoxesDate = fromNow(25);
+      const trevorNoahDate = fromNow(32);
+      const mitskiDate = fromNow(45);
+      const bigThiefDate = fromNow(90);
+      const samMorrilDate = fromNow(10);
 
       await db.insert(announcements).values([
         // A mix of rows with and without ticketUrl so the feed exercises
         // both action-column states (real Ticketmaster link vs. hidden
         // placeholder keeping Watch/Calendar aligned).
-        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], ...onDay(27), onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-bon-iver' },
-        { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', ...onDay(44), onSaleStatus: 'announced', source: 'ticketmaster' },
-        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], ...onDay(3), onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-alvvays' },
-        { venueId: msgId, kind: 'concert', headliner: 'Fleet Foxes', ...onDay(42), onSaleStatus: 'sold_out', source: 'ticketmaster' },
-        { venueId: msgId, kind: 'concert', headliner: 'Meghan Trainor', support: ['Icona Pop'], ...onDay(20), onSaleStatus: 'cancelled', source: 'ticketmaster' },
-        { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], ...onDay(91), onSaleStatus: 'announced', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: bonIverDate, runStartDate: bonIverDate, runEndDate: bonIverDate, performanceDates: [bonIverDate], onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-bon-iver' },
+        { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: trevorNoahDate, runStartDate: trevorNoahDate, runEndDate: trevorNoahDate, performanceDates: [trevorNoahDate], onSaleStatus: 'announced', source: 'ticketmaster' },
+        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: alvvaysDate, runStartDate: alvvaysDate, runEndDate: alvvaysDate, performanceDates: [alvvaysDate], onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-alvvays' },
+        { venueId: msgId, kind: 'concert', headliner: 'Fleet Foxes', showDate: fleetFoxesDate, runStartDate: fleetFoxesDate, runEndDate: fleetFoxesDate, performanceDates: [fleetFoxesDate], onSaleStatus: 'sold_out', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'concert', headliner: 'Meghan Trainor', support: ['Icona Pop'], showDate: meghanDate, runStartDate: meghanDate, runEndDate: meghanDate, performanceDates: [meghanDate], onSaleStatus: 'cancelled', source: 'ticketmaster' },
+        { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: bigThiefDate, runStartDate: bigThiefDate, runEndDate: bigThiefDate, performanceDates: [bigThiefDate], onSaleStatus: 'announced', source: 'ticketmaster' },
         // Multi-night theatre run — exercises the run-card UI path
         {
           venueId: radioCityId,
@@ -441,8 +431,8 @@ export async function GET(request: Request) {
           source: 'ticketmaster',
         },
         // Nearby (non-followed) venues so the Near You tab has data.
-        ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', ...onDay(55), onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
-        ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', ...onDay(17), onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+        ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: mitskiDate, runStartDate: mitskiDate, runEndDate: mitskiDate, performanceDates: [mitskiDate], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+        ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: samMorrilDate, runStartDate: samMorrilDate, runEndDate: samMorrilDate, performanceDates: [samMorrilDate], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
       ]);
     }
 
