@@ -389,16 +389,44 @@ export async function GET(request: Request) {
       const irvingPlazaId = venueMap.get('Irving Plaza');
       const comedyCellarId = venueMap.get('The Comedy Cellar');
 
+      // Announcement dates are relative to today, for the same reason the
+      // Hamilton run above is: the Discover feed filters
+      // `showDate >= CURRENT_DATE OR runEndDate >= CURRENT_DATE`
+      // (packages/api/src/routers/discover.ts), so any hardcoded date silently
+      // drops out of every feed the moment it elapses. That is exactly what
+      // happened to the two rows carrying a `ticketUrl` — dated 2026-08-15 and
+      // 2026-07-22 — which left
+      // `discover-kind-alignment.spec.ts`'s "seed should include a row with a
+      // ticket link" permanently red from 2026-08-16 onward.
+      //
+      // The offsets preserve the original ordering and spacing of the set,
+      // anchored so the earliest row sits a few days out.
+      const daysOut = (n: number): string => {
+        const d = new Date();
+        d.setUTCHours(0, 0, 0, 0);
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+      };
+      const onDay = (n: number) => {
+        const date = daysOut(n);
+        return {
+          showDate: date,
+          runStartDate: date,
+          runEndDate: date,
+          performanceDates: [date],
+        };
+      };
+
       await db.insert(announcements).values([
         // A mix of rows with and without ticketUrl so the feed exercises
         // both action-column states (real Ticketmaster link vs. hidden
         // placeholder keeping Watch/Calendar aligned).
-        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], showDate: '2026-08-15', runStartDate: '2026-08-15', runEndDate: '2026-08-15', performanceDates: ['2026-08-15'], onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-bon-iver' },
-        { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', showDate: '2026-09-01', runStartDate: '2026-09-01', runEndDate: '2026-09-01', performanceDates: ['2026-09-01'], onSaleStatus: 'announced', source: 'ticketmaster' },
-        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], showDate: '2026-07-22', runStartDate: '2026-07-22', runEndDate: '2026-07-22', performanceDates: ['2026-07-22'], onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-alvvays' },
-        { venueId: msgId, kind: 'concert', headliner: 'Fleet Foxes', showDate: '2026-08-30', runStartDate: '2026-08-30', runEndDate: '2026-08-30', performanceDates: ['2026-08-30'], onSaleStatus: 'sold_out', source: 'ticketmaster' },
-        { venueId: msgId, kind: 'concert', headliner: 'Meghan Trainor', support: ['Icona Pop'], showDate: '2026-08-08', runStartDate: '2026-08-08', runEndDate: '2026-08-08', performanceDates: ['2026-08-08'], onSaleStatus: 'cancelled', source: 'ticketmaster' },
-        { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], showDate: '2026-10-18', runStartDate: '2026-10-18', runEndDate: '2026-10-18', performanceDates: ['2026-10-18'], onSaleStatus: 'announced', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'concert', headliner: 'Bon Iver', support: ['Big Thief'], ...onDay(27), onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-bon-iver' },
+        { venueId: msgId, kind: 'comedy', headliner: 'Trevor Noah', ...onDay(44), onSaleStatus: 'announced', source: 'ticketmaster' },
+        { venueId: bsId, kind: 'concert', headliner: 'Alvvays', support: ['Men I Trust'], ...onDay(3), onSaleStatus: 'on_sale', source: 'ticketmaster', ticketUrl: 'https://www.ticketmaster.com/event/e2e-alvvays' },
+        { venueId: msgId, kind: 'concert', headliner: 'Fleet Foxes', ...onDay(42), onSaleStatus: 'sold_out', source: 'ticketmaster' },
+        { venueId: msgId, kind: 'concert', headliner: 'Meghan Trainor', support: ['Icona Pop'], ...onDay(20), onSaleStatus: 'cancelled', source: 'ticketmaster' },
+        { venueId: btId, kind: 'concert', headliner: 'Big Thief', support: ['Adrianne Lenker'], ...onDay(91), onSaleStatus: 'announced', source: 'ticketmaster' },
         // Multi-night theatre run — exercises the run-card UI path
         {
           venueId: radioCityId,
@@ -413,8 +441,8 @@ export async function GET(request: Request) {
           source: 'ticketmaster',
         },
         // Nearby (non-followed) venues so the Near You tab has data.
-        ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', showDate: '2026-09-12', runStartDate: '2026-09-12', runEndDate: '2026-09-12', performanceDates: ['2026-09-12'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
-        ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', showDate: '2026-08-05', runStartDate: '2026-08-05', runEndDate: '2026-08-05', performanceDates: ['2026-08-05'], onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+        ...(irvingPlazaId ? [{ venueId: irvingPlazaId, kind: 'concert' as const, headliner: 'Mitski', ...onDay(55), onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
+        ...(comedyCellarId ? [{ venueId: comedyCellarId, kind: 'comedy' as const, headliner: 'Sam Morril', ...onDay(17), onSaleStatus: 'on_sale' as const, source: 'ticketmaster' as const }] : []),
       ]);
     }
 
