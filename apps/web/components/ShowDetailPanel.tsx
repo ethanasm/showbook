@@ -286,7 +286,7 @@ export function ShowDetailPanel({
             style={{
               padding: "8px 14px",
               background: "var(--ink)",
-              color: "var(--accent-text)",
+              color: "var(--bg)",
               border: "none",
               fontFamily: "var(--font-geist-sans), sans-serif",
               fontSize: 12.5,
@@ -306,7 +306,7 @@ export function ShowDetailPanel({
             style={{
               padding: "8px 14px",
               background: "var(--ink)",
-              color: "var(--accent-text)",
+              color: "var(--bg)",
               border: "none",
               fontFamily: "var(--font-geist-sans), sans-serif",
               fontSize: 12.5,

@@ -279,7 +279,7 @@ const formStyles: Record<string, React.CSSProperties> = {
     fontFamily: "var(--font-geist-sans)",
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "var(--accent-text)",
+    color: "var(--bg)",
     background: "var(--ink)",
     border: "none",
     borderRadius: 0,

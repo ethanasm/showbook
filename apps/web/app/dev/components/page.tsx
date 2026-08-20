@@ -21,7 +21,7 @@ function futureDate(daysFromNow: number): {
   const d = new Date();
   d.setDate(d.getDate() + daysFromNow);
   return {
-    month: d.toLocaleDateString("en-US", { month: "short" }).toUpperCase(),
+    month: d.toLocaleDateString("en-US", { month: "short" }),
     day: String(d.getDate()),
     year: String(d.getFullYear()),
     dow: d.toLocaleDateString("en-US", { weekday: "short" }),

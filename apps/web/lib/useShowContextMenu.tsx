@@ -304,7 +304,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
                   cursor: "pointer",
                   border: "none",
                   background: "var(--ink)",
-                  color: "var(--accent-text)",
+                  color: "var(--bg)",
                   opacity: updateState.isPending ? 0.5 : 1,
                 }}
               >

@@ -735,7 +735,7 @@
 
 .venue-inspector__cta-follow--following {
   background: var(--ink);
-  color: var(--accent-text);
+  color: var(--bg);
   border-color: var(--ink);
 }
 

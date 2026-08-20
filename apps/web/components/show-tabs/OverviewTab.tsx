@@ -197,7 +197,7 @@ export function OverviewTab({
             const style: React.CSSProperties = {
               padding: "10px 14px",
               background: action.primary
-                ? "var(--accent-strong)"
+                ? "var(--ink)"
                 : action.active
                   ? "var(--surface)"
                   : "transparent",
@@ -205,7 +205,7 @@ export function OverviewTab({
                 ? "none"
                 : `1px solid ${action.danger ? "rgba(230,57,70,0.25)" : action.active ? "var(--ink)" : "var(--rule-strong)"}`,
               color: action.primary
-                ? "var(--accent-text)"
+                ? "var(--bg)"
                 : action.danger
                   ? "#E63946"
                   : "var(--ink)",

@@ -447,7 +447,7 @@ export default function AddPage() {
                 fontFamily: sans,
                 fontSize: 11.5,
                 fontWeight: 600,
-                color: "var(--accent-text)",
+                color: "var(--bg)",
                 background: "var(--ink)",
                 border: "none",
                 padding: "9px 14px",

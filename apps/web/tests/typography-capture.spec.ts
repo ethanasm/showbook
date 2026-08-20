@@ -7,11 +7,12 @@
  * Opt-in via `RUN_TYPO_SCREENSHOTS=1`.
  */
 
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { loginAndSeedAsWorker } from './helpers/auth';
 
 const RUN = process.env.RUN_TYPO_SCREENSHOTS === '1';
 const OUT = process.env.TYPO_OUT ?? 'test-results/typography';
+const THEME = process.env.TYPO_THEME ?? 'dark';
 
 test.describe('typography capture', () => {
   test.skip(!RUN, 'set RUN_TYPO_SCREENSHOTS=1');
@@ -20,13 +21,22 @@ test.describe('typography capture', () => {
   test('captures the five mocked screens', async ({ page }) => {
     test.setTimeout(180_000);
     await loginAndSeedAsWorker(page);
-    await page.emulateMedia({ colorScheme: 'light' });
-    await page.addInitScript(() => {
-      try {
-        window.localStorage.setItem('showbook-theme', 'light');
-      } catch {
-        /* ignore */
-      }
+    // Set the theme through Preferences, not localStorage: `PrefsServerSync`
+    // pushes the server-stored preference into `setTheme` on every mount, so
+    // a localStorage write is overwritten on the next navigation.
+    await page.emulateMedia({
+      colorScheme: THEME === 'light' ? 'light' : 'dark',
+    });
+    await page.goto('/preferences');
+    await page.waitForLoadState('networkidle');
+    const themeOption = THEME === 'light' ? 'Light' : 'Dark';
+    await page
+      .getByRole('main')
+      .getByRole('button', { name: themeOption, exact: true })
+      .first()
+      .click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', THEME, {
+      timeout: 10_000,
     });
 
     const shots: [string, string][] = [

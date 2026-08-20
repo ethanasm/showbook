@@ -616,7 +616,7 @@ function TierButton({
         padding: "5px 8px",
         border: "none",
         background: active ? "var(--ink)" : "transparent",
-        color: active ? "var(--accent-text)" : "var(--muted)",
+        color: active ? "var(--bg)" : "var(--muted)",
         cursor: disabled ? "not-allowed" : "pointer",
         transition: "background 0.12s, color 0.12s",
       }}
@@ -643,7 +643,7 @@ function Checkbox({ checked }: { checked: boolean }) {
         transition: "all 0.12s",
       }}
     >
-      {checked && <Check size={12} color="var(--accent-text)" strokeWidth={3} />}
+      {checked && <Check size={12} color="var(--bg)" strokeWidth={3} />}
     </div>
   );
 }
@@ -813,7 +813,7 @@ const submitButtonStyle: React.CSSProperties = {
   fontFamily: sans,
   fontSize: 11.5,
   fontWeight: 600,
-  color: "var(--accent-text)",
+  color: "var(--bg)",
   background: "var(--ink)",
   border: "none",
   borderRadius: 0,

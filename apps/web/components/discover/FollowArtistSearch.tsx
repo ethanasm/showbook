@@ -202,7 +202,7 @@ export function FollowArtistSearch({
 const ctaButtonStyle: React.CSSProperties = {
   padding: "10px 18px",
   background: "var(--ink)",
-  color: "var(--accent-text)",
+  color: "var(--bg)",
   border: "none",
   borderRadius: 8,
   cursor: "pointer",

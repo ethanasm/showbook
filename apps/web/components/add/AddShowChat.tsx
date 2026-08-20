@@ -253,7 +253,7 @@ export function AddShowChat({
               padding: "12px 16px",
               borderRadius: 12,
               background: msg.role === "user" ? "var(--ink)" : "var(--surface)",
-              color: msg.role === "user" ? "var(--accent-text)" : "var(--ink)",
+              color: msg.role === "user" ? "var(--bg)" : "var(--ink)",
               fontFamily: sans,
               fontSize: 13,
               lineHeight: 1.5,

@@ -752,7 +752,7 @@ a.discover-row__headliner-link:hover {
 
 .discover-watch-btn--watching {
   background: var(--ink);
-  color: var(--accent-text);
+  color: var(--bg);
   border: none;
 }
 
@@ -1135,7 +1135,7 @@ a.discover-row__headliner-link:hover {
 
 .discover-region-form__add {
   background: var(--ink);
-  color: var(--accent-text);
+  color: var(--bg);
 }
 
 .discover-region-form__add:disabled {

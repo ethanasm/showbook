@@ -241,7 +241,7 @@ const retryButtonStyle: React.CSSProperties = {
   fontFamily: sans,
   fontSize: 11.5,
   fontWeight: 600,
-  color: "var(--accent-text)",
+  color: "var(--bg)",
   background: "var(--ink)",
   border: "none",
   borderRadius: 0,

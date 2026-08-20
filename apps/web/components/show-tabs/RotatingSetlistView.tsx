@@ -438,7 +438,7 @@ function PositionPoolCandidateRow({
           style={{
             padding: "0 6px",
             background: "var(--ink)",
-            color: "var(--accent-text)",
+            color: "var(--bg)",
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: 11.5,
           }}

@@ -737,7 +737,7 @@ function ShowHeaderStrip({
             style={{
               padding: "4px 10px",
               background: "var(--ink)",
-              color: "var(--accent-text)",
+              color: "var(--bg)",
               fontFamily: "var(--font-geist-sans), sans-serif",
               fontSize: 12.5,
               fontWeight: 600,

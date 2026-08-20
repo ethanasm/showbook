@@ -678,7 +678,7 @@ export function GmailConsentModal({
               fontFamily: "var(--font-geist-sans)",
               fontSize: 11.5,
               fontWeight: 600,
-              color: "var(--accent-text)",
+              color: "var(--bg)",
               background: "var(--ink)",
               border: "1px solid var(--ink)",
               borderRadius: 0,

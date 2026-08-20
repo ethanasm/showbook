@@ -633,7 +633,7 @@ export function SetlistSectionsEditor({
           style={{
             padding: "7px 14px",
             background: "var(--ink)",
-            color: "var(--accent-text)",
+            color: "var(--bg)",
             border: "none",
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: 12.5,

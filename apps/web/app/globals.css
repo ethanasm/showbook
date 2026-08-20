@@ -26,6 +26,13 @@
   --kind-comedy: #9D4EDD;
   --kind-festival: #2A9D8F;
   --kind-sports: #E8772E;
+  /* Discover surfaces two kinds the logbook never stores — `film` (TM
+     screenings) and `unknown` (unclassified TM events). They had no token
+     while the kind was rendered as coloured text with a lucide icon (the
+     text simply inherited); now that `KindSwatch` paints a 5px square from
+     `var(--kind-<kind>)`, a missing token renders nothing at all. */
+  --kind-film: #6C7A89;
+  --kind-unknown: #6C7A89;
 
   /* One family, three weights. `--font-geist-sans` is Archivo (loaded in
      `layout.tsx`); `--font-display` and `--font-geist-mono` are aliases kept
@@ -80,6 +87,8 @@
   --kind-comedy: #8340C4;
   --kind-festival: #238577;
   --kind-sports: #D06A28;
+  --kind-film: #5A6672;
+  --kind-unknown: #5A6672;
 }
 
 * {

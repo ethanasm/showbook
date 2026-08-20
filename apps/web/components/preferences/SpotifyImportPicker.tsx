@@ -453,7 +453,7 @@ function Checkbox({ checked, disabled }: { checked: boolean; disabled?: boolean 
         opacity: disabled && !checked ? 0.4 : 1,
       }}
     >
-      {checked && <Check size={12} color="var(--accent-text)" strokeWidth={3} />}
+      {checked && <Check size={12} color="var(--bg)" strokeWidth={3} />}
     </div>
   );
 }
@@ -491,7 +491,7 @@ const importButtonStyle: React.CSSProperties = {
   fontFamily: sans,
   fontSize: 11.5,
   fontWeight: 600,
-  color: "var(--accent-text)",
+  color: "var(--bg)",
   background: "var(--ink)",
   border: "none",
   borderRadius: 0,

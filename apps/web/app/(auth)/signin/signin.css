@@ -136,7 +136,7 @@
 
 .signin__card-chip--ticketed {
   background: var(--ink);
-  color: var(--accent-text);
+  color: var(--bg);
 }
 
 .signin__card-chip--watching {

@@ -344,7 +344,7 @@ export default function ArtistsView() {
                   gap: 6,
                   padding: "5px 10px",
                   background: active ? "var(--ink)" : "transparent",
-                  color: active ? "var(--accent-text)" : "var(--ink)",
+                  color: active ? "var(--bg)" : "var(--ink)",
                   border: "none",
                   borderLeft: i === 0 ? "none" : "1px solid var(--rule-strong)",
                   cursor: "pointer",
@@ -677,7 +677,7 @@ function ArtistsEmptyActions() {
           style={{
             padding: "10px 18px",
             background: "var(--ink)",
-            color: "var(--accent-text)",
+            color: "var(--bg)",
             border: "none",
             borderRadius: 8,
             cursor: "pointer",
