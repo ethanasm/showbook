@@ -340,7 +340,8 @@
      headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
   grid-template-columns: 88px 84px minmax(0, 320px) 104px 88px 190px;
   justify-content: space-between;
-  column-gap: 16px;
+  /* Keep in lock-step with `.discover-row`'s column-gap. */
+  column-gap: 12px;
   padding: 0 12px 10px;
   font-size: 11.5px;
   color: var(--muted);
@@ -446,7 +447,14 @@
      the gaps rather than the headliner track. */
   grid-template-columns: 88px 84px minmax(0, 320px) 104px 88px 190px;
   justify-content: space-between;
-  column-gap: 16px;
+  /* 12px, not 16px. The redesign widened the date column (72 → 88, so
+     `Sep 5 sat` fits on one line) and the on-sale column (96 → 104), which
+     at a 1280px viewport starved the headliner track to 88px and tripped
+     `discover-kind-alignment.spec.ts`'s 100px floor. The minimum gap is the
+     right place to give that back: `justify-content: space-between` already
+     grows the gaps on wider viewports, so this only bites in the starved
+     case it exists to fix. */
+  column-gap: 12px;
   padding: 12px;
   align-items: center;
   border-bottom: 1px solid var(--rule);
