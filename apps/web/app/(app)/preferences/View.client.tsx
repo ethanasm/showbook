@@ -439,7 +439,7 @@ export default function PreferencesView() {
                                 marginTop: 2,
                               }}
                             >
-                              {venue.city.toLowerCase()}
+                              {venue.city}
                             </div>
                           )}
                         </div>

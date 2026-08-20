@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Ticket, MoreHorizontal, Trash2 } from "lucide-react";
 import {
   daysUntil,
-  formatDateParts,
 } from "@showbook/shared";
+import { formatDateParts } from "@/lib/date-parts";
 import {
   getHeadliner,
   getHeadlinerId,

@@ -170,7 +170,7 @@ export function AnnouncementRow({
             className="discover-row__onsale-soon"
             title="Tickets go on sale within the next week"
           >
-            on sale soon
+            On sale soon
           </span>
         )}
       </div>

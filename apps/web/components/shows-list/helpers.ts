@@ -7,7 +7,8 @@
  * each redefining them.
  */
 
-import { formatDateParts } from "@showbook/shared";
+
+import { toDateParts } from "@/lib/date-parts";
 import type { ShowKind, ShowState } from "@/components/design-system";
 import type { SortConfig as SortConfigBase } from "@/components/SortHeader";
 import { compareNullable } from "@/lib/sort";
@@ -142,33 +143,10 @@ export const MODE_LABELS: Record<
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Web's date parts. Wraps the shared `formatDateParts` and title-cases the
- * month it returns.
- *
- * The shared helper upper-cases the month (`SEP`) because every date on both
- * surfaces used to be set in Geist Mono with an uppercase transform. The web
- * type system no longer upper-cases anything, so the shape of the string has
- * to change with it — `Sep 11`, not `SEP 11`. The shared helper keeps its
- * uppercase output for the mobile app, which is out of scope for this pass.
- */
-const UPPER_MONTHS = new Set([
-  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
-  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
-]);
-
-export const toDateParts: typeof formatDateParts = (date, fallback?) => {
-  const parts = fallback
-    ? formatDateParts(date, fallback)
-    : formatDateParts(date);
-  // Only a real month abbreviation is re-cased — the fallback months
-  // ("TBD", "—") must survive untouched.
-  if (!UPPER_MONTHS.has(parts.month)) return parts;
-  return {
-    ...parts,
-    month: parts.month.charAt(0) + parts.month.slice(1).toLowerCase(),
-  };
-};
+// Re-exported so the existing `toDateParts(show.date)` call sites in this
+// folder keep reading naturally. The implementation (and the reason web
+// title-cases the month) lives in `@/lib/date-parts`.
+export { toDateParts };
 
 export function defaultDirFor(field: SortField): "asc" | "desc" {
   return field === "date" || field === "paid" ? "desc" : "asc";

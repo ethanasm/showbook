@@ -598,7 +598,7 @@ export function CalendarView({
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {show.venue.name.toLowerCase()}
+                    {show.venue.name}
                   </div>
                 </div>
                 <div

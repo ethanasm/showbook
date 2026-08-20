@@ -147,15 +147,15 @@ export function OverviewTab({
                 style={{
                   fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: 11.5,
-                  color: "var(--faint)",
+                  color: "var(--muted)",
                 }}
               >
-                {entry.role}
+                {entry.role.charAt(0).toUpperCase() + entry.role.slice(1)}
               </div>
               <div
                 style={{
                   fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 19,
+                  fontSize: 17,
                   fontWeight: 600,
                   color: "var(--ink)",
                   letterSpacing: -0.4,

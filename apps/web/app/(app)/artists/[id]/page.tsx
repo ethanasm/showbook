@@ -24,10 +24,10 @@ import { MediaSection } from "@/components/media";
 import { SpotifyMark } from "@/components/BrandIcons";
 import {
   formatDateMedium as formatDateLong,
-  formatDateParts,
   formatOnSaleDate,
   InputMaxLength,
 } from "@showbook/shared";
+import { formatDateParts } from "@/lib/date-parts";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -278,7 +278,7 @@ export default function ArtistDetailPage() {
         </Link>
         <span style={{ color: "var(--faint)" }}>/</span>
         <span style={{ color: "var(--ink)" }}>
-          {performer.name.toLowerCase()}
+          {performer.name}
         </span>
       </div>
 

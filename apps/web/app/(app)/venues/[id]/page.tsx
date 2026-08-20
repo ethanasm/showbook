@@ -32,12 +32,12 @@ import {
 import { MediaSection } from "@/components/media";
 import {
   formatDateMedium as formatDateLong,
-  formatDateParts,
   formatOnSaleDate,
   formatVenueLocation,
   isVenuePlaceholder,
   InputMaxLength,
 } from "@showbook/shared";
+import { formatDateParts } from "@/lib/date-parts";
 
 type Performer = {
   id: string;
@@ -302,7 +302,7 @@ export default function VenueDetailPage() {
       >
         <Link href="/venues" style={{ color: "var(--muted)", textDecoration: "none" }}>← venues</Link>
         <span style={{ color: "var(--faint)" }}>/</span>
-        <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
+        <span style={{ color: "var(--ink)" }}>{venue.name}</span>
       </div>
 
       {/* Hero — small image + title + eyebrow, Follow on right */}

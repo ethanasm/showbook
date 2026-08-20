@@ -17,9 +17,9 @@ import {
 } from "lucide-react";
 import {
   applyEffectiveShowState,
-  formatDateParts as toDateParts,
   parseLocalDate,
 } from "@showbook/shared";
+import { toDateParts } from "@/lib/date-parts";
 import { countdownText } from "@/lib/countdown";
 import {
   getHeadliner,
@@ -785,7 +785,7 @@ export default function HomeView() {
                             marginTop: 2,
                           }}
                         >
-                          {neighborhood.toLowerCase()}
+                          {neighborhood}
                         </div>
                       )}
                     </div>

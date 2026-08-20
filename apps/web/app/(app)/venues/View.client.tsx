@@ -243,7 +243,7 @@ export default function VenuesView() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="filter venues, cities, states..."
+            placeholder="Filter venues, cities, states"
             style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13, outline: "none", width: "100%" }}
           />
         </div>

@@ -219,7 +219,7 @@ export function VenueRail({
                             </div>
                             {v.label && (
                               <div className="discover-rail__item-nbhd">
-                                {v.label.toLowerCase()}
+                                {v.label}
                               </div>
                             )}
                           </div>
@@ -255,7 +255,7 @@ export function VenueRail({
                   </div>
                   {v.label && (
                     <div className="discover-rail__item-nbhd">
-                      {v.label.toLowerCase()}
+                      {v.label}
                     </div>
                   )}
                 </div>

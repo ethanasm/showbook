@@ -648,7 +648,7 @@ function FeedSection({
                     </button>
                     <span className="discover-venue-group__meta">
                       {group.label
-                        ? group.label.toLowerCase() + " · "
+                        ? group.label + " · "
                         : ""}
                       {groupItems.length} upcoming
                     </span>
@@ -1106,7 +1106,7 @@ export default function DiscoverView() {
             >
               <span>{label}</span>
               <span className="discover-tab__count">
-                ({tabCounts[key]})
+                {tabCounts[key]}
               </span>
             </button>
           ))}

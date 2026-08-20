@@ -713,7 +713,7 @@ function VenueInspector({
                   )}
                 </div>
                 <div className="venue-inspector__visit-seat">
-                  {show.seat ? show.seat.toLowerCase() : "general"}
+                  {show.seat ? show.seat : "General"}
                 </div>
               </div>
               <div className="venue-inspector__visit-price">

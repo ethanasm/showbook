@@ -712,7 +712,7 @@ export function StatsView({
                             textOverflow: "ellipsis",
                           }}
                         >
-                          {neighborhood.toLowerCase()}
+                          {neighborhood}
                         </div>
                       )}
                     </div>
@@ -774,7 +774,7 @@ export function StatsView({
                       marginTop: 2,
                     }}
                   >
-                    {neighborhood.toLowerCase()}
+                    {neighborhood}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 2 }}>

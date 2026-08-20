@@ -251,7 +251,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     const venueLabel = show.venue.name;
     const venueSub = isVenuePlaceholder(show.venue.city) ? undefined : show.venue.city;
     const seatLabel = show.seat ?? "—";
-    const seatSub = show.ticketCount > 1 ? `${show.ticketCount} tix` : "1 tix";
+    const seatSub =
+      show.ticketCount > 1 ? `${show.ticketCount} tickets` : "1 ticket";
     const priceLabel = show.pricePaid
       ? `$${parseFloat(show.pricePaid).toFixed(0)}`
       : "—";
@@ -265,10 +266,10 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         ? "Have tickets"
         : "Watching";
     return [
-      { label: "VENUE", value: venueLabel, sub: venueSub, href: `/venues/${show.venue.id}` },
-      { label: "SEAT", value: seatLabel, sub: seatSub },
-      { label: "PAID", value: priceLabel, sub: priceSub || undefined },
-      { label: "STATE", value: stateLabel },
+      { label: "Venue", value: venueLabel, sub: venueSub, href: `/venues/${show.venue.id}` },
+      { label: "Seat", value: seatLabel, sub: seatSub },
+      { label: "Paid", value: priceLabel, sub: priceSub || undefined },
+      { label: "State", value: stateLabel },
     ];
   }, [isPast, show]);
 
@@ -724,12 +725,12 @@ function ShowHeaderStrip({
               border: "1px solid var(--rule-strong)",
               color: "var(--muted)",
               fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 11.5,
+              fontSize: 12.5,
               fontWeight: 500,
             }}
             data-testid="went-badge"
           >
-            went
+            Went
           </span>
         ) : show.state === "ticketed" ? (
           <span
@@ -738,11 +739,11 @@ function ShowHeaderStrip({
               background: "var(--ink)",
               color: "var(--accent-text)",
               fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 11.5,
+              fontSize: 12.5,
               fontWeight: 600,
             }}
           >
-            tix
+            Ticketed
           </span>
         ) : (
           <span
@@ -755,7 +756,7 @@ function ShowHeaderStrip({
               fontWeight: 500,
             }}
           >
-            watching
+            Watching
           </span>
         )}
         </div>

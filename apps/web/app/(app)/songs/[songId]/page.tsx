@@ -81,7 +81,7 @@ export default function SongDetailPage() {
           href={`/artists/${song.performerId}`}
           style={{ color: "var(--muted)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
         >
-          <ChevronLeft size={12} /> {song.performerName.toLowerCase()}
+          <ChevronLeft size={12} /> {song.performerName}
         </Link>
       </div>
 

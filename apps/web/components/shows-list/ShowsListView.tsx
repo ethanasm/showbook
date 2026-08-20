@@ -478,7 +478,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               }}
             >
               <Trash2 size={14} />
-              <span>{deleteAllShows.isPending ? "Deleting..." : "Delete All"}</span>
+              <span>{deleteAllShows.isPending ? "Deleting…" : "Delete all"}</span>
             </button>
           )}
           {tabsRow}
@@ -719,7 +719,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             color: "var(--faint)",
           }}>
             {isUpcoming
-              ? `${ticketedCount} tix · ${watchingCount} watching`
+              ? `${ticketedCount} ticketed · ${watchingCount} watching`
               : `${pastCount} past`}
           </div>
         </div>
