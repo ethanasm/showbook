@@ -271,7 +271,7 @@ export default function ArtistsView() {
 
   if (error) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-mono), monospace", fontSize: "0.85rem", color: "var(--kind-theatre)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-sans), sans-serif", fontSize: "0.85rem", color: "var(--kind-theatre)" }}>
         Failed to load artists.
       </div>
     );
@@ -294,10 +294,10 @@ export default function ArtistsView() {
       {/* Header */}
       <div style={{ padding: "16px var(--page-pad-x)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
         <div>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--muted)" }}>
             Artists from your shows and follows
           </div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
+          <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
             Artists
           </div>
         </div>
@@ -311,7 +311,7 @@ export default function ArtistsView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="filter artists..."
-            style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, outline: "none", width: "100%", letterSpacing: ".02em" }}
+            style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, outline: "none", width: "100%" }}
           />
         </div>
 
@@ -343,14 +343,13 @@ export default function ArtistsView() {
                   alignItems: "center",
                   gap: 6,
                   padding: "5px 10px",
-                  background: active ? "var(--accent)" : "transparent",
+                  background: active ? "var(--ink)" : "transparent",
                   color: active ? "var(--accent-text)" : "var(--ink)",
                   border: "none",
                   borderLeft: i === 0 ? "none" : "1px solid var(--rule-strong)",
                   cursor: "pointer",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  letterSpacing: ".02em",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                 }}
               >
                 {isFollowingSegment && <Eye size={11} />}
@@ -362,7 +361,7 @@ export default function ArtistsView() {
 
         <div style={{ flex: 1 }} />
 
-        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
+        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--faint)" }}>
           {filtered.length} artist{filtered.length !== 1 ? "s" : ""}
         </div>
       </div>
@@ -370,7 +369,7 @@ export default function ArtistsView() {
       {/* List */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--ink)", fontWeight: 500 }}>
             {search ? "Matching" : SCOPE_LABELS[scope]} &middot; {filtered.length}
           </div>
         </div>
@@ -407,7 +406,7 @@ export default function ArtistsView() {
         ) : (
           <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)", maxWidth: listMaxWidth }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 12, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 12, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--faint)" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
               <SortHeader<SortField> field="shows" label={isMobile ? "Shows" : "Activity"} sort={sort} onToggle={toggleSort} align={isMobile ? "center" : undefined} />
               {!isHalfWidth && !isMobile && <SortHeader<SortField> field="firstSeen" label="First Seen" sort={sort} onToggle={toggleSort} />}
@@ -462,19 +461,19 @@ export default function ArtistsView() {
                     compact={isMobile}
                   />
                   {!isHalfWidth && !isMobile && (
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: artist.firstSeen ? "var(--muted)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: artist.firstSeen ? "var(--muted)" : "var(--faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {artist.firstSeen ? formatDate(artist.firstSeen) : "—"}
                     </div>
                   )}
                   {!isMobile && (
-                    <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: artist.lastSeen ? "var(--muted)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: artist.lastSeen ? "var(--muted)" : "var(--faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {artist.lastSeen ? formatDate(artist.lastSeen) : "—"}
                     </div>
                   )}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-end", gap: 8 }}>
                     {!isMobile && !isHalfWidth && (
                       <>
-                        <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster" Icon={Ticket} color="var(--accent)" />
+                        <MetadataIcon linked={Boolean(artist.ticketmasterAttractionId)} label="Ticketmaster" Icon={Ticket} color="var(--accent-strong)" />
                         <MetadataIcon linked={Boolean(artist.musicbrainzId)} label="MusicBrainz" Icon={Music2} color="var(--kind-concert)" />
                       </>
                     )}
@@ -559,11 +558,10 @@ function ActivityCell({
   compact: boolean;
 }) {
   const baseStyle: React.CSSProperties = {
-    fontFamily: "var(--font-geist-mono), monospace",
-    fontSize: 12,
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 12.5,
     fontWeight: 500,
     fontFeatureSettings: '"tnum"',
-    letterSpacing: ".02em",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -595,7 +593,7 @@ function ActivityCell({
         <span style={{ color: "var(--faint)", margin: "0 6px" }}>&middot;</span>
       )}
       {hasFuture && (
-        <span style={{ color: "var(--accent)" }}>
+        <span style={{ color: "var(--accent-strong)" }}>
           {futureShowsCount} upcoming
         </span>
       )}
@@ -638,7 +636,7 @@ function FollowToggle({
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          color: isFollowed ? "var(--accent)" : "var(--faint)",
+          color: isFollowed ? "var(--ink)" : "var(--faint)",
         }}
         onMouseEnter={(e) => {
           if (!isFollowed) e.currentTarget.style.color = "var(--muted)";
@@ -678,15 +676,13 @@ function ArtistsEmptyActions() {
           href="/logbook?gmail=1"
           style={{
             padding: "10px 18px",
-            background: "var(--accent)",
+            background: "var(--ink)",
             color: "var(--accent-text)",
             border: "none",
             borderRadius: 8,
             cursor: "pointer",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             fontWeight: 500,
             display: "inline-flex",
             alignItems: "center",
@@ -706,10 +702,8 @@ function ArtistsEmptyActions() {
             border: "1px solid var(--rule-strong)",
             borderRadius: 8,
             cursor: "pointer",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             fontWeight: 500,
             display: "inline-flex",
             alignItems: "center",
@@ -724,11 +718,10 @@ function ArtistsEmptyActions() {
       <Link
         href="/discover"
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
           textDecoration: "none",
-          letterSpacing: ".04em",
           display: "inline-flex",
           alignItems: "center",
           gap: 4,

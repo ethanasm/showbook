@@ -13,8 +13,8 @@ export function CenteredMessage({ children, tone }: CenteredMessageProps) {
         alignItems: "center",
         justifyContent: "center",
         minHeight: 300,
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 11.5,
         color: tone === "error" ? "var(--kind-theatre)" : "var(--muted)",
       }}
     >

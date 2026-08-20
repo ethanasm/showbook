@@ -227,10 +227,10 @@ export default function VenuesView() {
       {/* Header */}
       <div style={{ padding: "16px var(--page-pad-x)", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--rule)" }}>
         <div>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12, color: "var(--muted)" }}>
             Places you&apos;ve been
           </div>
-          <div style={{ fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 700, color: "var(--ink)", letterSpacing: "-0.01em", lineHeight: 1.1, marginTop: 4 }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 28, fontWeight: 600, color: "var(--ink)", letterSpacing: "-0.035em", lineHeight: 1.05, marginTop: 2 }}>
             Venues
           </div>
         </div>
@@ -244,11 +244,11 @@ export default function VenuesView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="filter venues, cities, states..."
-            style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, outline: "none", width: "100%", letterSpacing: ".02em" }}
+            style={{ border: "none", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13, outline: "none", width: "100%" }}
           />
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
+        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--muted)" }}>
           {filtered.length} venue{filtered.length !== 1 ? "s" : ""}
         </div>
       </div>
@@ -256,7 +256,7 @@ export default function VenuesView() {
       {/* List */}
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14 }}>
-          <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
+          <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5, color: "var(--ink)", fontWeight: 600 }}>
             {search ? "Matching" : "All venues"} &middot; {filtered.length}
           </div>
         </div>
@@ -281,7 +281,7 @@ export default function VenuesView() {
         ) : (
           <div style={{ margin: "4px var(--page-pad-x) 0", background: "var(--surface)", maxWidth: listMaxWidth }}>
             {/* Column headers */}
-            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-mono), monospace", fontSize: 9.5, color: "var(--faint)", letterSpacing: ".12em", textTransform: "uppercase" }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: isMobile ? "8px 12px" : "10px 20px", borderBottom: "1px solid var(--rule)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--muted)" }}>
               <SortHeader<SortField> field="name" label="Name" sort={sort} onToggle={toggleSort} />
               {!isHalfWidth && !isMobile && (
                 <SortHeader<SortField> field="state" label="State" sort={sort} onToggle={toggleSort} />
@@ -319,14 +319,14 @@ export default function VenuesView() {
                             if (e.key === "Escape") setEditingVenueId(null);
                           }}
                           onBlur={commitRename}
-                          style={{ border: "none", borderBottom: "1px solid var(--accent)", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, outline: "none", width: "100%" }}
+                          style={{ border: "none", borderBottom: "1px solid var(--ink)", background: "transparent", color: "var(--ink)", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 14, fontWeight: 500, outline: "none", width: "100%" }}
                         />
                       </div>
                     </div>
                   ) : (
                     <Link
                       href={`/venues/${v.id}`}
-                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: compact ? "5px 20px" : isMobile ? "10px 12px" : "12px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
+                      style={{ display: "grid", gridTemplateColumns: gridCols, columnGap: isMobile ? 8 : 20, padding: compact ? "5px 20px" : isMobile ? "10px 12px" : "11px 20px", borderBottom: "1px solid var(--rule)", alignItems: "center", cursor: "pointer", color: "inherit", textDecoration: "none" }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface2, var(--surface))")}
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
@@ -345,31 +345,31 @@ export default function VenuesView() {
                           {v.name}
                         </span>
                         {isMobile && (
-                          <span style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10.5, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
+                          <span style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
                             {cityDisplay}
                           </span>
                         )}
                       </div>
                       {!isHalfWidth && !isMobile && (
-                        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: v.stateRegion ? "var(--ink)" : "var(--faint)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13, color: v.stateRegion ? "var(--muted)" : "var(--faint)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {v.stateRegion ?? "—"}
                         </div>
                       )}
                       {!isMobile && (
-                        <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11, color: "var(--muted)", letterSpacing: ".02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {cityDisplay}
                         </div>
                       )}
-                      <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                      <div style={{ textAlign: "center", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13.5, fontWeight: 500, color: v.pastShowsCount > 0 ? "var(--ink)" : "var(--faint)" }}>
                         {v.pastShowsCount}
                       </div>
-                      <div style={{ textAlign: "center", fontFamily: "var(--font-geist-mono), monospace", fontSize: 12, fontWeight: 500, color: v.futureShowsCount > 0 ? "var(--accent)" : "var(--faint)", fontFeatureSettings: '"tnum"' }}>
+                      <div style={{ textAlign: "center", fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 13.5, fontWeight: v.futureShowsCount > 0 ? 600 : 400, color: v.futureShowsCount > 0 ? "var(--accent-strong)" : "var(--faint)" }}>
                         {v.futureShowsCount}
                       </div>
-                      {!isMobile && <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--accent)" />}
-                      {!isMobile && <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--kind-concert)" />}
+                      {!isMobile && <MetadataIcon linked={Boolean(v.ticketmasterVenueId)} label="Ticketmaster ID" Icon={Ticket} color="var(--muted)" />}
+                      {!isMobile && <MetadataIcon linked={Boolean(v.googlePlaceId)} label="Google Places ID" Icon={MapPin} color="var(--muted)" />}
                       <span title={v.isFollowed ? "Following" : "Not following"} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                        {v.isFollowed && <Eye size={13} color="var(--accent)" />}
+                        {v.isFollowed && <Eye size={13} color="var(--ink)" />}
                       </span>
                     </Link>
                   )}
@@ -415,15 +415,13 @@ function VenuesEmptyActions() {
         href="/logbook?gmail=1"
         style={{
           padding: "10px 18px",
-          background: "var(--accent)",
+          background: "var(--ink)",
           color: "var(--accent-text)",
           border: "none",
           borderRadius: 8,
           cursor: "pointer",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           fontWeight: 500,
           display: "inline-flex",
           alignItems: "center",
@@ -443,10 +441,8 @@ function VenuesEmptyActions() {
           border: "1px solid var(--rule-strong)",
           borderRadius: 8,
           cursor: "pointer",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           fontWeight: 500,
           display: "inline-flex",
           alignItems: "center",
@@ -480,7 +476,9 @@ function MetadataIcon({
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        color: linked ? color : "var(--faint)",
+        // Present = `--muted`; absent = a 16%-opacity ghost of the same
+        // glyph, so the column reads as a checklist rather than as colour.
+        color: linked ? color : "color-mix(in srgb, var(--ink) 16%, transparent)",
       }}
     >
       <Icon size={13} strokeWidth={2} />

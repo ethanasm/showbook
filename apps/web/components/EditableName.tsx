@@ -46,7 +46,7 @@ export function EditableName({
   const sharedStyle: React.CSSProperties = {
     fontFamily: "var(--font-display)",
     fontSize: compact ? 28 : 48,
-    fontWeight: 700,
+    fontWeight: 600,
     color: "var(--ink)",
     letterSpacing: "-0.01em",
     lineHeight: 1.1,
@@ -75,7 +75,7 @@ export function EditableName({
           width: "100%",
           background: "transparent",
           border: "none",
-          borderBottom: "2px solid var(--accent)",
+          borderBottom: "2px solid var(--ink)",
           outline: "none",
           padding: 0,
         }}

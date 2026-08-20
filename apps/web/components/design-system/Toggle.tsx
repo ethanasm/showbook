@@ -25,7 +25,7 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
-        background: checked ? "var(--accent)" : "rgba(128,128,128,.3)",
+        background: checked ? "var(--ink)" : "rgba(128,128,128,.3)",
         opacity: disabled ? 0.5 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}

@@ -10,10 +10,15 @@
   --rule-strong: rgba(245,245,243,.22);
   --rule-faint: rgba(245,245,243,.06);
 
-  /* Accent */
+  /* Accent. `--accent` is reserved for the Add-a-show button and the focus
+     ring. Text and links that used to be gold use `--accent-strong`: on the
+     light ground #E5A800 only clears 3:1 and is unsafe at body size, so it
+     darkens to #8A6A00 there. On the dark ground #FFD166 passes, so the two
+     are the same value. */
   --accent: #FFD166;
   --accent-faded: rgba(255,209,102,.14);
   --accent-text: #0C0C0C;
+  --accent-strong: #FFD166;
 
   /* Kind colors */
   --kind-concert: #3A86FF;
@@ -22,12 +27,13 @@
   --kind-festival: #2A9D8F;
   --kind-sports: #E8772E;
 
-  /* Display family — used for screen titles, headliner/show titles,
-     venue/artist hero, empty-state and modal headings. Fraunces, the
-     editorial serif from the design handoff (mirrors mobile's
-     `heroTitle`/`headliner` Fraunces treatment); the size/weight
-     treatment lives in `.display-title`. */
-  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  /* One family, three weights. `--font-geist-sans` is Archivo (loaded in
+     `layout.tsx`); `--font-display` and `--font-geist-mono` are aliases kept
+     so the inline-style call sites that still name them resolve to the same
+     stack. Display sizes are Archivo 600 (see `.display-title`); figures use
+     `font-feature-settings: "tnum"` instead of a monospace face. */
+  --font-display: var(--font-geist-sans), sans-serif;
+  --font-geist-mono: var(--font-geist-sans);
 
   /* Page-level horizontal padding. Used by inline styles via
      `padding: "Yp var(--page-pad-x)"` so screens can be retuned for
@@ -66,6 +72,7 @@
   --accent: #E5A800;
   --accent-faded: rgba(229,168,0,.12);
   --accent-text: #0C0C0C;
+  --accent-strong: #8A6A00;
 
   /* Kind colors */
   --kind-concert: #2E6FD9;
@@ -91,6 +98,14 @@ body {
   color: var(--ink);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  /* Tabular figures app-wide. The old type system aligned dates, counts,
+     prices and paging by setting them in Geist Mono; Archivo does it with
+     `tnum` instead, and every figure in this app lives in a table, a stat
+     block or a date column where column alignment is what you want. Declaring
+     it once on `body` is the same contract the handoff asks for ("every figure
+     gets tnum") without repeating the property at several hundred call sites.
+     `.tnum` stays available for elements that opt out of inheritance. */
+  font-feature-settings: "tnum";
 }
 
 a {
@@ -113,7 +128,7 @@ a {
 }
 .inline-link:hover,
 .inline-link:focus-visible {
-  text-decoration-color: var(--accent);
+  text-decoration-color: var(--ink);
   color: var(--ink);
 }
 
@@ -133,14 +148,20 @@ a {
   border: 0;
 }
 
-/* Display title treatment — Geist 700 at title sizes, slightly tightened.
-   Used for page H1s, headliner/show names, venue/artist hero,
-   empty-state + modal headings. */
+/* Display title treatment — Archivo 600 at title sizes, tightened. Used for
+   page H1s, headliner/show names, venue/artist hero, empty-state + modal
+   headings. Nothing in the app uses weight 700. */
 .display-title {
-  font-family: var(--font-display);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+/* Tabular figures. Dates, counts, prices, paging and stat values align in
+   columns through Archivo's `tnum` rather than through a monospace face. */
+.tnum {
+  font-feature-settings: "tnum";
 }
 
 /* Public shell — wraps the unauthenticated legal pages
@@ -161,7 +182,7 @@ a {
   align-items: center;
   gap: 10px;
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 17px;
   color: var(--ink);
   text-decoration: none;
@@ -182,17 +203,17 @@ a {
 }
 .legal-doc h1 {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 36px;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
   margin: 0;
 }
 .legal-doc h2 {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 19px;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.025em;
   margin: 22px 0 -8px;
   color: var(--ink);
 }
@@ -207,14 +228,12 @@ a {
   gap: 8px;
 }
 .legal-doc__updated {
-  font-family: var(--font-geist-mono), monospace;
   font-size: 11.5px;
-  letter-spacing: 0.06em;
   color: var(--muted);
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
 }
 .legal-doc a {
-  color: var(--accent);
+  color: var(--accent-strong);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -227,11 +246,9 @@ a {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 11.5px;
   color: var(--faint);
+  font-feature-settings: "tnum";
   border-top: 1px solid var(--rule);
 }
 .site-footer__links {

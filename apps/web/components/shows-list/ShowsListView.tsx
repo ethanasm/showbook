@@ -190,7 +190,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
 
   if (error) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-mono), monospace", fontSize: "0.85rem", color: "var(--kind-theatre)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300, fontFamily: "var(--font-geist-sans), sans-serif", fontSize: "0.85rem", color: "var(--kind-theatre)" }}>
         Failed to load shows.
       </div>
     );
@@ -250,11 +250,10 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               <Ic size={14} />
               <span>{l}</span>
               <span style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: active ? "var(--bg)" : "var(--faint)",
                 opacity: active ? 0.7 : 1,
-                letterSpacing: ".04em",
                 fontWeight: 400,
               }}>
                 {count}
@@ -268,22 +267,20 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
     const titleBlock = (
       <div>
         <div style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 12,
           color: "var(--muted)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
         }}>
           {labels.eyebrow}
         </div>
         <div style={{
-          fontFamily: "var(--font-display)",
-          fontSize: 26,
-          fontWeight: 700,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 28,
+          fontWeight: 600,
           color: "var(--ink)",
-          letterSpacing: "-0.01em",
-          lineHeight: 1.1,
-          marginTop: 4,
+          letterSpacing: "-0.035em",
+          lineHeight: 1.05,
+          marginTop: 2,
         }}>
           {labels.title}
         </div>
@@ -293,14 +290,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           style={{
             display: "inline-block",
             marginTop: 6,
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--accent)",
-            letterSpacing: ".04em",
-            textDecoration: "none",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 12.5,
+            color: "var(--ink)",
+            textDecoration: "underline",
+            textDecorationColor: "var(--rule-strong)",
+            textUnderlineOffset: 3,
           }}
         >
-          {isUpcoming ? "View past →" : "View upcoming →"}
+          {isUpcoming ? "View past" : "View upcoming"}
         </Link>
       </div>
     );
@@ -353,7 +351,7 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               }}
             >
               <span>Import</span>
-              <span aria-hidden style={{ fontSize: 9 }}>▾</span>
+              <span aria-hidden style={{ fontSize: 11.5 }}>▾</span>
             </button>
           </div>
           {tabsRow}
@@ -515,10 +513,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                   border: "1px solid var(--rule-strong)",
                   borderRadius: 8,
                   cursor: "pointer",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   fontWeight: 500,
                 }}
               >
@@ -538,15 +534,13 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
           href="/discover"
           style={{
             padding: "10px 18px",
-            background: "var(--accent)",
+            background: "var(--ink)",
             color: "var(--accent-text)",
             border: "none",
             borderRadius: 8,
             cursor: "pointer",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             fontWeight: 500,
             display: "inline-flex",
             alignItems: "center",
@@ -564,15 +558,13 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             onClick={() => scan.openModal("gmail")}
             style={{
               padding: "10px 18px",
-              background: "var(--accent)",
+              background: "var(--ink)",
               color: "var(--accent-text)",
               border: "none",
               borderRadius: 8,
               cursor: "pointer",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               fontWeight: 500,
               display: "inline-flex",
               alignItems: "center",
@@ -592,10 +584,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
               border: "1px solid var(--rule-strong)",
               borderRadius: 8,
               cursor: "pointer",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               fontWeight: 500,
               display: "inline-flex",
               alignItems: "center",
@@ -616,10 +606,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 border: "1px solid var(--rule-strong)",
                 borderRadius: 8,
                 cursor: "pointer",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 fontWeight: 500,
                 display: "inline-flex",
                 alignItems: "center",
@@ -642,10 +630,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             border: "1px solid var(--rule-strong)",
             borderRadius: 8,
             cursor: "pointer",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             fontWeight: 500,
             display: "inline-flex",
             alignItems: "center",
@@ -691,17 +677,15 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         {isUpcoming && dateTbdShows.length > 0 && (
           <div data-testid="date-tbd-rail" style={{ padding: isMobile ? "12px 16px 0" : "14px var(--page-pad-x) 0", display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
             }}>
               Date TBD &middot; {dateTbdShows.length}
             </div>
             <div style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--faint)",
               lineHeight: 1.5,
             }}>
@@ -722,18 +706,16 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
         {/* Section label */}
         <div style={{ padding: isMobile ? "16px 16px 8px" : "18px var(--page-pad-x) 8px", display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
           <div style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--ink)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
             fontWeight: 500,
           }}>
             {labels.title} &middot; {filteredShows.length}
           </div>
           <div style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
           }}>
             {isUpcoming
@@ -754,11 +736,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             padding: "10px 20px 10px 10px",
             marginBottom: 8,
             borderBottom: "1px solid var(--rule)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9.5,
-            color: "var(--faint)",
-            letterSpacing: ".12em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
+            color: "var(--muted)",
           }}>
             <div />
             <div />
@@ -904,11 +884,9 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
             }}
           >
             <div style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
               marginBottom: 4,
               padding: "0 2px",
             }}>
@@ -947,11 +925,10 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.2 }}>{label}</span>
                   <span style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--muted)",
                     marginTop: 2,
-                    letterSpacing: ".02em",
                   }}>{desc}</span>
                 </span>
               </button>
@@ -986,11 +963,10 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                     {deleteAllShows.isPending ? "Deleting..." : "Delete all shows"}
                   </span>
                   <span style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--muted)",
                     marginTop: 2,
-                    letterSpacing: ".02em",
                   }}>
                     Permanently remove every show in your logbook
                   </span>
@@ -1008,10 +984,8 @@ export default function ShowsListView({ mode }: ShowsListViewProps) {
                 background: "transparent",
                 color: "var(--muted)",
                 cursor: "pointer",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
               }}
             >
               Cancel

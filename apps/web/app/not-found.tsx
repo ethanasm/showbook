@@ -34,11 +34,9 @@ export default function AppNotFound() {
             href="/home"
             style={{
               padding: "8px 16px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               background: "var(--ink)",
               color: "var(--bg)",
               border: "1px solid var(--ink)",
@@ -51,11 +49,9 @@ export default function AppNotFound() {
             href="/upcoming"
             style={{
               padding: "8px 16px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               background: "transparent",
               color: "var(--ink)",
               border: "1px solid var(--rule-strong)",
@@ -68,11 +64,9 @@ export default function AppNotFound() {
             href="/logbook"
             style={{
               padding: "8px 16px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               background: "transparent",
               color: "var(--ink)",
               border: "1px solid var(--rule-strong)",

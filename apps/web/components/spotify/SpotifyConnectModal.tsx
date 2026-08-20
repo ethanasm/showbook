@@ -5,7 +5,7 @@ import { Music } from "lucide-react";
 
 import { ExternalSourceDisclaimer } from "../external-connection/ExternalSourceDisclaimer";
 
-const mono = "var(--font-geist-mono)";
+const sans = "var(--font-geist-sans)";
 
 /**
  * The universal "Connect Spotify" modal. Mounted once per
@@ -134,10 +134,8 @@ const iconRowStyle: React.CSSProperties = {
 };
 
 const titleStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 11,
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--ink)",
 };
 
@@ -150,12 +148,10 @@ const bodyStyle: React.CSSProperties = {
 
 const primaryButtonStyle: React.CSSProperties = {
   marginTop: 6,
-  fontFamily: mono,
-  fontSize: 11,
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
-  background: "var(--accent)",
+  background: "var(--ink)",
   color: "var(--bg)",
   border: "none",
   borderRadius: 0,
@@ -164,10 +160,8 @@ const primaryButtonStyle: React.CSSProperties = {
 };
 
 const secondaryButtonStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10.5,
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
+  fontFamily: sans,
+  fontSize: 11.5,
   background: "transparent",
   color: "var(--muted)",
   border: "none",
@@ -177,9 +171,8 @@ const secondaryButtonStyle: React.CSSProperties = {
 };
 
 const errorStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10.5,
-  letterSpacing: ".04em",
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "#E63946",
   marginTop: -4,
 };

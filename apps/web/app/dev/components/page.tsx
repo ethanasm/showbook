@@ -51,7 +51,7 @@ function DevContent() {
           style={{
             fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: "1.8rem",
-            fontWeight: 800,
+            fontWeight: 600,
             letterSpacing: "-0.02em",
             marginBottom: 8,
           }}
@@ -60,7 +60,7 @@ function DevContent() {
         </h1>
         <p
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
+            fontFamily: "var(--font-geist-sans), sans-serif",
             fontSize: "0.8rem",
             color: "var(--text-secondary)",
             marginBottom: 32,
@@ -86,10 +86,9 @@ function DevContent() {
                   background:
                     theme === t ? "var(--marquee-gold)" : "transparent",
                   color: theme === t ? "#0C0C0C" : "var(--text-secondary)",
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: "0.75rem",
                   cursor: "pointer",
-                  textTransform: "uppercase",
                   fontWeight: 600,
                 }}
               >
@@ -209,11 +208,9 @@ function Section({
     <section style={{ marginBottom: 32 }}>
       <h2
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
+          fontFamily: "var(--font-geist-sans), sans-serif",
           fontSize: "0.7rem",
           fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
           color: "var(--text-secondary)",
           marginBottom: 12,
         }}

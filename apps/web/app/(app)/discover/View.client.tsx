@@ -720,15 +720,13 @@ function FeedSection({
 
 const emptyCtaStyle: React.CSSProperties = {
   padding: "10px 18px",
-  background: "var(--accent)",
+  background: "var(--ink)",
   color: "var(--accent-text)",
   border: "none",
   borderRadius: 8,
   cursor: "pointer",
-  fontFamily: "var(--font-geist-mono), monospace",
-  fontSize: 11,
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 11.5,
   fontWeight: 500,
   display: "inline-flex",
   alignItems: "center",
@@ -1030,8 +1028,8 @@ export default function DiscoverView() {
             onClick={() => setHeaderSpotifyModalOpen(true)}
             title="Import the artists you follow on Spotify"
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               padding: "6px 10px",
               border: "1px solid var(--rule)",
               background: "transparent",
@@ -1042,7 +1040,7 @@ export default function DiscoverView() {
               gap: 6,
             }}
           >
-            <Music size={11} color="var(--accent)" />
+            <Music size={11} color="var(--accent-strong)" />
             Import from Spotify
           </button>
           <button
@@ -1052,8 +1050,8 @@ export default function DiscoverView() {
             disabled={refreshInFlight}
             title="Pull the latest events from Ticketmaster + scraped venues for everything you follow"
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               padding: "6px 10px",
               border: "1px solid var(--rule)",
               background: "transparent",
@@ -1079,8 +1077,8 @@ export default function DiscoverView() {
           role="status"
           aria-live="polite"
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
             margin: "0 0 16px",
             padding: "12px 0 4px 16px",

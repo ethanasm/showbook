@@ -111,11 +111,10 @@ export function NotesTab({ isPast, notes, onSave }: NotesTabProps) {
         />
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
             marginTop: 10,
-            letterSpacing: ".04em",
           }}
         >
           {saving

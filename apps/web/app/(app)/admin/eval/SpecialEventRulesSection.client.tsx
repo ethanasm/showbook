@@ -183,7 +183,7 @@ export function SpecialEventRulesSection() {
             onChange={(e) =>
               setDraft((d) => ({ ...d, pattern: e.target.value }))
             }
-            style={{ ...styles.input, fontFamily: "var(--font-geist-mono), monospace", minHeight: 80 }}
+            style={{ ...styles.input, fontFamily: "var(--font-geist-sans), sans-serif", minHeight: 80 }}
             required
           />
           {parseError ? <span style={styles.err}>{parseError}</span> : null}
@@ -254,8 +254,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   title: {
     fontSize: 16,
-    letterSpacing: ".08em",
-    textTransform: "uppercase",
     color: "var(--ink)",
     margin: "0 0 8px 0",
   },
@@ -269,8 +267,8 @@ const styles: Record<string, React.CSSProperties> = {
   table: {
     width: "100%",
     borderCollapse: "collapse" as const,
-    fontFamily: "var(--font-geist-mono), monospace",
-    fontSize: 12,
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontSize: 12.5,
   },
   th: {
     textAlign: "left" as const,
@@ -300,9 +298,7 @@ const styles: Record<string, React.CSSProperties> = {
   field: { display: "flex", flexDirection: "column", gap: 4 },
   fieldRow: { display: "flex", gap: 8, alignItems: "center" },
   label: {
-    fontSize: 11,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
+    fontSize: 11.5,
     color: "var(--muted)",
   },
   input: {
@@ -315,7 +311,7 @@ const styles: Record<string, React.CSSProperties> = {
   actions: { display: "flex", gap: 12, justifyContent: "flex-end" },
   btnPrimary: {
     padding: "8px 16px",
-    background: "var(--accent)",
+    background: "var(--ink)",
     color: "var(--bg)",
     border: "none",
     fontSize: 13,
@@ -326,7 +322,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     color: "var(--muted)",
     border: "1px solid var(--rule)",
-    fontSize: 12,
+    fontSize: 12.5,
     cursor: "pointer",
     marginRight: 8,
   },
@@ -335,8 +331,8 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     color: "#E63946",
     border: "1px solid #E63946",
-    fontSize: 12,
+    fontSize: 12.5,
     cursor: "pointer",
   },
-  err: { fontSize: 11, color: "#E63946" },
+  err: { fontSize: 11.5, color: "#E63946" },
 };

@@ -75,8 +75,8 @@ export function MediaTab({ isPast, mediaSection, mediaCount }: MediaTabProps) {
                 </div>
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--muted)",
                     marginTop: 2,
                   }}

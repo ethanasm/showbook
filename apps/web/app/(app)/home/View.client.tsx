@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { EmptyState, HeroCard } from "@/components/design-system";
+import { EmptyState, HeroCard, KindSwatch } from "@/components/design-system";
 import {
   GetStartedHub,
   useGetStartedDismissed,
@@ -13,11 +13,7 @@ import {
 import "@/components/design-system/design-system.css";
 import type { ShowKind } from "@/components/design-system/KindBadge";
 import {
-  ArrowRight,
   ChevronRight,
-  Music,
-  Eye,
-  Square,
 } from "lucide-react";
 import {
   applyEffectiveShowState,
@@ -25,7 +21,6 @@ import {
   parseLocalDate,
 } from "@showbook/shared";
 import { countdownText } from "@/lib/countdown";
-import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -48,7 +43,6 @@ function formatMiniDate(dateStr: string | null): string {
 
 // ── Shared style constants ───────────────────────────────────────────────
 
-const MONO = "var(--font-geist-mono), monospace";
 const SANS = "var(--font-geist-sans), sans-serif";
 
 // ── Component ────────────────────────────────────────────────────────────
@@ -243,30 +237,24 @@ export default function HomeView() {
         minHeight: 0,
       }}
     >
-      {/* Visually hidden page heading. The visual title is conveyed by
-          the wordmark + hero card; assistive tech still needs a single
-          unambiguous H1 per page to navigate by. */}
-      <h1 className="sr-only">Home</h1>
       {/* ── Top bar ─────────────────────────────────────────── */}
       <div className="home-topbar">
-        {/* Wordmark */}
-        <div
+        {/* Page title. This used to be a repeat of the sidebar wordmark
+            (music note + "showbook" set in mono); the redesign gives Home
+            the same plain title every other screen has. */}
+        <h1
           data-testid="home-wordmark"
           className="home-topbar__wordmark"
+          style={{
+            fontFamily: SANS,
+            fontSize: 15,
+            fontWeight: 600,
+            letterSpacing: "-0.025em",
+            color: "var(--ink)",
+          }}
         >
-          <Music size={15} color="var(--accent)" strokeWidth={2} />
-          <span
-            style={{
-              fontFamily: MONO,
-              fontSize: 13,
-              fontWeight: 600,
-              color: "var(--ink)",
-              letterSpacing: ".06em",
-            }}
-          >
-            showbook
-          </span>
-        </div>
+          Home
+        </h1>
 
         {stats && (
           <div
@@ -274,34 +262,30 @@ export default function HomeView() {
             aria-label="This year summary"
             className="home-topbar__stats"
           >
-            <div className="home-topbar__stats-year">
-              {new Date().getFullYear()}
-            </div>
+            <div className="home-topbar__stats-year">This year</div>
             {[
-              { label: "Shows", value: String(stats.shows) },
-              { label: "Venues", value: String(stats.venues) },
-              { label: "Artists", value: String(stats.artists) },
+              { label: "shows", value: String(stats.shows) },
+              { label: "venues", value: String(stats.venues) },
+              { label: "artists", value: String(stats.artists) },
             ].map(({ label, value }) => (
               <div key={label} className="home-topbar__stat">
                 <div
                   style={{
-                    fontFamily: MONO,
-                    fontSize: 16,
-                    fontWeight: 650,
+                    fontFamily: SANS,
+                    fontSize: 15,
+                    fontWeight: 600,
                     color: "var(--ink)",
                     lineHeight: 1,
-                    letterSpacing: 0,
-                    fontFeatureSettings: '"tnum"',
+                    letterSpacing: "-0.025em",
                   }}
                 >
                   {value}
                 </div>
                 <div
                   style={{
-                    fontFamily: MONO,
-                    fontSize: 9.5,
+                    fontFamily: SANS,
+                    fontSize: 12.5,
                     color: "var(--muted)",
-                    letterSpacing: ".06em",
                     lineHeight: 1,
                   }}
                 >
@@ -335,9 +319,10 @@ export default function HomeView() {
         )}
         {/* ── NEXT UP Section ─────────────────────────────── */}
         <section>
-          {/* Section header — the "Next up · in N days …" pulse label lives
-              inside HeroCard itself; this row is just the right-aligned
-              "see all N upcoming" link. */}
+          {/* Section header — eyebrow on the left, "see all" link on the
+              right. The eyebrow used to be a pulsing accent label inside the
+              hero card itself; it reads better as quiet sentence-case text
+              above the card, which lets the hero open on the headliner. */}
           <div
             style={{
               display: "flex",
@@ -347,23 +332,23 @@ export default function HomeView() {
               minHeight: 16,
             }}
           >
-            <div style={{ flex: 1 }} />
+            <div style={{ flex: 1, fontFamily: SANS, fontSize: 12.5, color: "var(--muted)" }}>
+              {heroShow ? `Next up · ${countdownText(heroShow.date)}` : null}
+            </div>
             {upcoming.length > 0 && (
               <div
                 onClick={() => router.push("/upcoming")}
                 style={{
-                  fontFamily: MONO,
-                  fontSize: 10.5,
-                  color: "var(--accent)",
-                  letterSpacing: ".04em",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
+                  fontFamily: SANS,
+                  fontSize: 12.5,
+                  color: "var(--ink)",
+                  textDecoration: "underline",
+                  textDecorationColor: "var(--rule-strong)",
+                  textUnderlineOffset: 3,
                   cursor: "pointer",
                 }}
               >
-                see all {upcoming.length} upcoming{" "}
-                <ArrowRight size={11} color="var(--accent)" />
+                See all {upcoming.length} upcoming
               </div>
             )}
           </div>
@@ -422,7 +407,6 @@ export default function HomeView() {
               {miniCards.map((u) => {
                 const kind = u.kind as ShowKind;
                 const kindColor = `var(--kind-${kind})`;
-                const KindIcon = KIND_ICONS[kind];
                 const hasTix = u.state === "ticketed";
 
                 return (
@@ -446,60 +430,31 @@ export default function HomeView() {
                         justifyContent: "space-between",
                       }}
                     >
+                      <KindSwatch kind={kind} />
+                      {/* State — a word, not a filled chip. Gold is reserved
+                          for the Add-a-show button; ticketed reads as emphasis
+                          through weight and `--accent-strong`. */}
                       <span
                         style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontFamily: MONO,
-                          fontSize: 10,
-                          color: kindColor,
-                          letterSpacing: ".1em",
-                          textTransform: "uppercase",
-                          fontWeight: 500,
-                        }}
-                      >
-                        <KindIcon size={11} color={kindColor} />
-                        {KIND_LABELS[kind]}
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: MONO,
-                          fontSize: 10,
+                          fontFamily: SANS,
+                          fontSize: 12.5,
+                          fontWeight: hasTix ? 500 : 400,
                           color: hasTix
-                            ? "var(--accent)"
+                            ? "var(--accent-strong)"
                             : "var(--muted)",
-                          letterSpacing: ".04em",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
                         }}
                       >
-                        {hasTix ? (
-                          <>
-                            <Square
-                              size={8}
-                              fill="var(--accent)"
-                              color="var(--accent)"
-                            />
-                            tix
-                          </>
-                        ) : (
-                          <>
-                            <Eye size={10} color="var(--muted)" />
-                            watching
-                          </>
-                        )}
+                        {hasTix ? "Ticketed" : "Watching"}
                       </span>
                     </div>
 
                     {/* Headliner */}
                     <div
                       style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: 16,
-                        fontWeight: 700,
-                        letterSpacing: "-0.01em",
+                        fontFamily: SANS,
+                        fontSize: 17,
+                        fontWeight: 600,
+                        letterSpacing: "-0.025em",
                         color: "var(--ink)",
                         lineHeight: 1.1,
                         marginTop: 6,
@@ -529,7 +484,7 @@ export default function HomeView() {
                     <div
                       style={{
                         fontFamily: SANS,
-                        fontSize: 12,
+                        fontSize: 12.5,
                         color: "var(--muted)",
                         marginTop: 3,
                         whiteSpace: "nowrap",
@@ -559,8 +514,8 @@ export default function HomeView() {
                     >
                       <span
                         style={{
-                          fontFamily: MONO,
-                          fontSize: 11,
+                          fontFamily: SANS,
+                          fontSize: 11.5,
                           color: "var(--ink)",
                           fontWeight: 500,
                         }}
@@ -569,8 +524,8 @@ export default function HomeView() {
                       </span>
                       <span
                         style={{
-                          fontFamily: MONO,
-                          fontSize: 10,
+                          fontFamily: SANS,
+                          fontSize: 11.5,
                           color: "var(--faint)",
                         }}
                       >
@@ -597,41 +552,37 @@ export default function HomeView() {
           >
             <div
               style={{
-                fontFamily: MONO,
-                fontSize: 11,
+                fontFamily: SANS,
+                fontSize: 12.5,
                 color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
+                fontWeight: 600,
               }}
             >
               Recent
             </div>
             <div
               style={{
-                fontFamily: MONO,
-                fontSize: 10.5,
-                color: "var(--faint)",
+                fontFamily: SANS,
+                fontSize: 12.5,
+                color: "var(--muted)",
               }}
             >
-              last 5 &middot; of {totalPast}
+              Last 5 of {totalPast}
             </div>
             <div style={{ flex: 1 }} />
             <div
               onClick={() => router.push("/logbook")}
               style={{
-                fontFamily: MONO,
-                fontSize: 10.5,
-                color: "var(--accent)",
-                letterSpacing: ".04em",
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
+                fontFamily: SANS,
+                fontSize: 12.5,
+                color: "var(--ink)",
+                textDecoration: "underline",
+                textDecorationColor: "var(--rule-strong)",
+                textUnderlineOffset: 3,
                 cursor: "pointer",
               }}
             >
-              open in Shows{" "}
-              <ArrowRight size={11} color="var(--accent)" />
+              Open in Shows
             </div>
           </div>
 
@@ -651,7 +602,6 @@ export default function HomeView() {
               recentShows.map((s) => {
                 const kind = s.kind as ShowKind;
                 const kindColor = `var(--kind-${kind})`;
-                const KindIcon = KIND_ICONS[kind];
                 const dateParts = toDateParts(s.date);
                 const headliner = getHeadliner(s);
                 const headlinerId = getHeadlinerId(s);
@@ -677,63 +627,41 @@ export default function HomeView() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                   >
-                    {/* Date */}
-                    <div>
-                      <div
-                        style={{
-                          fontFamily: SANS,
-                          fontSize: 17,
-                          color: "var(--ink)",
-                          fontWeight: 500,
-                          letterSpacing: -0.5,
-                          lineHeight: 1,
-                          fontFeatureSettings: '"tnum"',
-                        }}
-                      >
-                        {dateParts.month} {dateParts.day}
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: MONO,
-                          fontSize: 10,
-                          color: "var(--faint)",
-                          marginTop: 3,
-                        }}
-                      >
-                        {dateParts.year} &middot;{" "}
-                        {dateParts.dow.toLowerCase()}
-                      </div>
+                    {/* Date — one line, `Aug 16 '26`. The two-line
+                        `AUG 16 / 2026 · sun` stack made every past row as tall
+                        as a hero date. */}
+                    <div
+                      style={{
+                        fontFamily: SANS,
+                        fontSize: 14,
+                        color: "var(--ink)",
+                        fontWeight: 500,
+                        letterSpacing: "-0.025em",
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {dateParts.month} {dateParts.day}{" "}
+                      <span style={{ color: "var(--faint)" }}>
+                        &rsquo;{dateParts.year.slice(-2)}
+                      </span>
                     </div>
 
                     {/* Kind — desktop only; on mobile we show the kind icon
                         next to the venue name to keep the row to 3 cols. */}
-                    <div
-                      className="desktop-only"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 7,
-                        fontFamily: MONO,
-                        fontSize: 10.5,
-                        color: kindColor,
-                        letterSpacing: ".08em",
-                        textTransform: "uppercase",
-                        fontWeight: 500,
-                      }}
-                    >
-                      <KindIcon size={12} color={kindColor} />
-                      {KIND_LABELS[kind]}
+                    <div className="desktop-only">
+                      <KindSwatch kind={kind} />
                     </div>
 
                     {/* Headline + support */}
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
-                          fontFamily: "var(--font-display)",
-                          fontSize: 14,
-                          fontWeight: 700,
+                          fontFamily: SANS,
+                          fontSize: 15,
+                          fontWeight: 600,
                           color: "var(--ink)",
-                          letterSpacing: "-0.01em",
+                          letterSpacing: "-0.025em",
                           lineHeight: 1.1,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -800,7 +728,7 @@ export default function HomeView() {
                         style={{
                           display: "inline-flex",
                           fontFamily: SANS,
-                          fontSize: 12,
+                          fontSize: 12.5,
                           color: "var(--muted)",
                           marginTop: 4,
                           whiteSpace: "nowrap",
@@ -811,7 +739,15 @@ export default function HomeView() {
                           maxWidth: "100%",
                         }}
                       >
-                        <KindIcon size={11} color={kindColor} />
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 5,
+                            height: 5,
+                            flexShrink: 0,
+                            background: kindColor,
+                          }}
+                        />
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                           {s.venue.name}
                         </span>
@@ -843,8 +779,8 @@ export default function HomeView() {
                       {neighborhood && (
                         <div
                           style={{
-                            fontFamily: MONO,
-                            fontSize: 10.5,
+                            fontFamily: SANS,
+                            fontSize: 11.5,
                             color: "var(--muted)",
                             marginTop: 2,
                           }}

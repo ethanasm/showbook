@@ -113,7 +113,7 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
             <div style={{
               fontFamily: "var(--font-display)",
               fontSize: 17,
-              fontWeight: 700,
+              fontWeight: 600,
               color: "var(--ink)",
               letterSpacing: "-0.01em",
               lineHeight: 1.1,
@@ -123,10 +123,9 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
               {importSource === "eventbrite" && "Import from Eventbrite"}
             </div>
             <div style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".04em",
               marginTop: 2,
             }}>
               {headerSubtitle}
@@ -161,10 +160,9 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
               style={{ animation: "spin 1s linear infinite" }}
             />
             <span style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".04em",
             }}>
               {importSource === "gmail"
                 ? progress?.phase === "processing"
@@ -185,7 +183,7 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                 <div style={{
                   width: `${Math.round((progress.processed / progress.total) * 100)}%`,
                   height: "100%",
-                  background: "var(--accent)",
+                  background: "var(--ink)",
                   borderRadius: 2,
                   transition: "width 0.3s ease",
                 }} />
@@ -214,11 +212,9 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
           >
             <label
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
               }}
             >
               Your setlist.fm username
@@ -303,11 +299,9 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                   border: "none",
                   background: "var(--ink)",
                   color: "var(--bg)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   fontWeight: 600,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
                   cursor: "pointer",
                 }}
               >
@@ -323,10 +317,8 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                   border: "none",
                   background: "transparent",
                   color: "var(--muted)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   cursor: "pointer",
                 }}
               >
@@ -369,11 +361,10 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
             </div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 lineHeight: 1.7,
                 color: "var(--muted)",
-                letterSpacing: ".02em",
               }}
             >
               {importSource === "gmail"
@@ -389,10 +380,8 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                   border: "1px solid var(--rule-strong)",
                   background: "transparent",
                   color: "var(--ink)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   cursor: "pointer",
                 }}
               >
@@ -405,10 +394,8 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                   border: "none",
                   background: "var(--ink)",
                   color: "var(--bg)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   cursor: "pointer",
                   textDecoration: "none",
                   display: "inline-flex",
@@ -483,11 +470,9 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                       </span>
                       {dup && (
                         <span style={{
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 9,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
                           color: "var(--muted)",
-                          letterSpacing: ".06em",
-                          textTransform: "uppercase",
                           padding: "1px 5px",
                           border: "1px solid var(--rule-strong)",
                         }}>
@@ -496,21 +481,18 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
                       )}
                       {ticket.kind_hint && (
                         <span style={{
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 9,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
                           color: "var(--faint)",
-                          letterSpacing: ".06em",
-                          textTransform: "uppercase",
                         }}>
                           {ticket.kind_hint}
                         </span>
                       )}
                     </div>
                     <div style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10.5,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--muted)",
-                      letterSpacing: ".04em",
                       marginTop: 2,
                       display: "flex",
                       gap: 12,
@@ -540,10 +522,9 @@ export function BulkImportModal({ scan, isDuplicate, gmailScanAccepted }: BulkIm
           }}>
             {addedCount > 0 && !adding && (
               <span style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--kind-concert)",
-                letterSpacing: ".04em",
               }}>
                 {addedCount} added
               </span>
@@ -628,7 +609,7 @@ export function GmailConsentModal({
               margin: 0,
               fontFamily: "var(--font-display)",
               fontSize: 20,
-              fontWeight: 700,
+              fontWeight: 600,
               color: "var(--ink)",
             }}
           >
@@ -653,7 +634,7 @@ export function GmailConsentModal({
               target="_blank"
               rel="noreferrer"
               style={{
-                color: "var(--accent)",
+                color: "var(--accent-strong)",
                 textDecoration: "underline",
               }}
             >
@@ -676,8 +657,8 @@ export function GmailConsentModal({
             onClick={onCancel}
             disabled={submitting}
             style={{
-              fontFamily: "var(--font-geist-mono)",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans)",
+              fontSize: 11.5,
               fontWeight: 500,
               color: "var(--ink)",
               background: "transparent",
@@ -685,8 +666,6 @@ export function GmailConsentModal({
               borderRadius: 0,
               padding: "6px 12px",
               cursor: submitting ? "not-allowed" : "pointer",
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
             }}
           >
             Cancel
@@ -696,17 +675,15 @@ export function GmailConsentModal({
             onClick={onAccept}
             disabled={submitting}
             style={{
-              fontFamily: "var(--font-geist-mono)",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans)",
+              fontSize: 11.5,
               fontWeight: 600,
               color: "var(--accent-text)",
-              background: "var(--accent)",
-              border: "1px solid var(--accent)",
+              background: "var(--ink)",
+              border: "1px solid var(--ink)",
               borderRadius: 0,
               padding: "6px 12px",
               cursor: submitting ? "not-allowed" : "pointer",
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               opacity: submitting ? 0.6 : 1,
             }}
           >

@@ -144,10 +144,9 @@ export function MultiNightContextBanner({
       </div>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".02em",
           lineHeight: 1.6,
         }}
       >
@@ -165,8 +164,8 @@ export function MultiNightContextBanner({
             border: "1px solid var(--rule)",
             padding: "4px 10px",
             color: "var(--ink)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             cursor: "pointer",
           }}
         >
@@ -179,8 +178,8 @@ export function MultiNightContextBanner({
           style={{
             margin: 0,
             paddingLeft: 18,
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
             lineHeight: 1.5,
           }}
@@ -235,7 +234,7 @@ export function GapChartRow({
         >
           <div
             style={{
-              background: "var(--accent)",
+              background: "var(--ink)",
               height: 6,
               width: `${pct}%`,
             }}
@@ -244,10 +243,9 @@ export function GapChartRow({
       </div>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".02em",
           whiteSpace: "nowrap",
         }}
       >
@@ -274,8 +272,8 @@ function HotRow({ title, evidence }: { title: string; evidence: string }) {
       <span>{title}</span>
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
         }}
       >
@@ -317,8 +315,8 @@ export function BustoutCandidateRow({
         </span>
         <span
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
           }}
         >
@@ -327,9 +325,9 @@ export function BustoutCandidateRow({
       </div>
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          color: "var(--accent)",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
+          color: "var(--accent-strong)",
         }}
       >
         ×{song.overdueScore.toFixed(1)}
@@ -364,18 +362,17 @@ export function PositionPoolCard({
       >
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
-            letterSpacing: ".14em",
           }}
         >
           {ROLE_LABELS[pool.role] ?? pool.role.toUpperCase()}
         </div>
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
           }}
         >
@@ -385,8 +382,8 @@ export function PositionPoolCard({
       {pool.candidates.length === 0 ? (
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
           }}
         >
@@ -440,11 +437,10 @@ function PositionPoolCandidateRow({
           data-testid="due-double-flag"
           style={{
             padding: "0 6px",
-            background: "var(--accent)",
+            background: "var(--ink)",
             color: "var(--accent-text)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9.5,
-            letterSpacing: ".08em",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
           }}
         >
           ★ DUE
@@ -452,8 +448,8 @@ function PositionPoolCandidateRow({
       )}
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
         }}
       >

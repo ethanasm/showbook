@@ -10,7 +10,7 @@ import type {
   FestivalLineupTmMatch,
 } from "./useFestivalLineup";
 
-const mono = "var(--font-geist-mono)";
+const sans = "var(--font-geist-sans)";
 
 interface FestivalLineupPickerProps {
   flow: FestivalLineupFlow;
@@ -184,16 +184,15 @@ export function FestivalLineupPicker({
       <div style={footerStyle}>
         <div
           style={{
-            fontFamily: mono,
-            fontSize: 11,
+            fontFamily: sans,
+            fontSize: 11.5,
             color: flow.selected.size > 0 ? "var(--ink)" : "var(--muted)",
-            letterSpacing: ".04em",
             fontWeight: flow.selected.size > 0 ? 500 : 400,
           }}
         >
           {flow.selected.size > 0 ? (
             <>
-              <span style={{ color: "var(--accent)" }}>{flow.selected.size}</span>{" "}
+              <span style={{ color: "var(--accent-strong)" }}>{flow.selected.size}</span>{" "}
               selected
             </>
           ) : (
@@ -354,10 +353,8 @@ function LineupRow({
             display: "inline-flex",
             alignItems: "center",
             gap: 4,
-            fontFamily: mono,
-            fontSize: 9.5,
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
+            fontFamily: sans,
+            fontSize: 11.5,
             flexShrink: 0,
           }}
           aria-label={editing ? "Cancel edit" : `Edit ${row.name}`}
@@ -613,14 +610,12 @@ function TierButton({
       onClick={onClick}
       disabled={disabled}
       style={{
-        fontFamily: mono,
-        fontSize: 9.5,
+        fontFamily: sans,
+        fontSize: 11.5,
         fontWeight: 600,
-        letterSpacing: ".08em",
-        textTransform: "uppercase",
         padding: "5px 8px",
         border: "none",
-        background: active ? "var(--accent)" : "transparent",
+        background: active ? "var(--ink)" : "transparent",
         color: active ? "var(--accent-text)" : "var(--muted)",
         cursor: disabled ? "not-allowed" : "pointer",
         transition: "background 0.12s, color 0.12s",
@@ -638,8 +633,8 @@ function Checkbox({ checked }: { checked: boolean }) {
         width: 18,
         height: 18,
         border: "1.5px solid",
-        borderColor: checked ? "var(--accent)" : "var(--rule-strong)",
-        background: checked ? "var(--accent)" : "transparent",
+        borderColor: checked ? "var(--ink)" : "var(--rule-strong)",
+        background: checked ? "var(--ink)" : "transparent",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -676,7 +671,7 @@ function Stat({
       <span
         style={{
           fontWeight: emphasize ? 600 : 500,
-          color: emphasize ? "var(--accent)" : (color ?? "var(--ink)"),
+          color: emphasize ? "var(--accent-strong)" : (color ?? "var(--ink)"),
           fontFeatureSettings: '"tnum"',
         }}
       >
@@ -709,16 +704,14 @@ const searchInputStyle: React.CSSProperties = {
   letterSpacing: -0.1,
 };
 const clearSearchStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
   color: "var(--muted)",
   background: "transparent",
   border: "none",
   padding: "2px 6px",
   cursor: "pointer",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   flexShrink: 0,
 };
 const statsBarStyle: React.CSSProperties = {
@@ -734,31 +727,27 @@ const statsInnerStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 14,
-  fontFamily: mono,
-  fontSize: 10.5,
-  letterSpacing: ".04em",
+  fontFamily: sans,
+  fontSize: 11.5,
   flexWrap: "wrap",
 };
 const bulkActionsStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  fontFamily: mono,
-  fontSize: 10,
-  letterSpacing: ".08em",
+  fontFamily: sans,
+  fontSize: 11.5,
   flexShrink: 0,
 };
 const selectAllStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
   color: "var(--muted)",
   background: "transparent",
   border: "none",
   padding: 0,
   cursor: "pointer",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   flexShrink: 0,
   textDecoration: "underline",
   textDecorationColor: "var(--rule-strong)",
@@ -767,10 +756,9 @@ const selectAllStyle: React.CSSProperties = {
 const emptyStyle: React.CSSProperties = {
   padding: "32px 20px",
   textAlign: "center",
-  fontFamily: mono,
-  fontSize: 11,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--muted)",
-  letterSpacing: ".04em",
 };
 const artistThumbStyle: React.CSSProperties = {
   width: 36,
@@ -799,12 +787,10 @@ const artistNameStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 const artistSubStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--faint)",
   marginTop: 3,
-  letterSpacing: ".04em",
-  textTransform: "uppercase",
 };
 const footerStyle: React.CSSProperties = {
   padding: "14px 20px",
@@ -817,24 +803,21 @@ const footerStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 const errorTextStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10.5,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "#E63946",
-  letterSpacing: ".04em",
   flex: 1,
   textAlign: "center",
 };
 const submitButtonStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 11,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 600,
   color: "var(--accent-text)",
-  background: "var(--accent)",
+  background: "var(--ink)",
   border: "none",
   borderRadius: 0,
   padding: "9px 16px",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   whiteSpace: "nowrap",
 };
 const searchPanelStyle: React.CSSProperties = {
@@ -863,16 +846,14 @@ const searchPanelInput: React.CSSProperties = {
   outline: "none",
 };
 const useTypedNameStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 9.5,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--muted)",
   background: "transparent",
   border: "1px solid var(--rule)",
   borderRadius: 4,
   padding: "3px 6px",
   cursor: "pointer",
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
   whiteSpace: "nowrap",
 };
 const searchResultsStyle: React.CSSProperties = {
@@ -882,11 +863,10 @@ const searchResultsStyle: React.CSSProperties = {
   overflow: "auto",
 };
 const searchHintStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10.5,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--muted)",
   padding: "10px 12px",
-  letterSpacing: ".04em",
 };
 const searchResultRow: React.CSSProperties = {
   display: "flex",
@@ -926,9 +906,8 @@ const searchResultName: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 const searchResultSource: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 9,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--faint)",
-  letterSpacing: ".08em",
   flexShrink: 0,
 };

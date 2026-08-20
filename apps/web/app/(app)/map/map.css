@@ -27,11 +27,9 @@
 }
 
 .map-topbar__subtitle {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .map-topbar__title {
@@ -54,10 +52,8 @@
   background: transparent;
   border: 1px solid var(--rule-strong);
   color: var(--ink);
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -73,10 +69,8 @@
   background: var(--ink);
   border: none;
   color: var(--bg);
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -97,8 +91,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 12px;
+  font-feature-settings: "tnum";
+  font-size: 12.5px;
   color: var(--muted);
 }
 
@@ -108,8 +102,8 @@
   border: none;
   border-radius: 6px;
   padding: 5px 14px;
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -126,8 +120,8 @@
   border: none;
   border-radius: 6px;
   padding: 8px 18px;
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 12px;
+  font-feature-settings: "tnum";
+  font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
   margin-top: 12px;
@@ -172,19 +166,16 @@
 }
 
 .map-filterbar__viewing-label {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   font-weight: 500;
 }
 
 .map-filterbar__viewing-text {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.03em;
 }
 
 /* The show-layer control is two adjacent segmented groups: the logbook
@@ -203,16 +194,14 @@
    Stats page timeframe selector — scoped to .map-filterbar so the shared
    segmented-filter on logbook / upcoming keeps its Geist Sans look. */
 .map-filterbar .segmented-filter__btn {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 400;
-  letter-spacing: 0.04em;
   padding: 7px 13px;
 }
 
 .map-filterbar .segmented-filter__btn--kind {
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 11.5px;
   padding: 7px 11px;
   gap: 6px;
 }
@@ -269,11 +258,9 @@
 }
 
 .map-overlay-legend__title {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   font-weight: 500;
   margin-bottom: 10px;
 }
@@ -298,10 +285,9 @@
 }
 
 .map-overlay-legend__dot-label {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
 }
 
 /* View toggle — bottom-right */
@@ -330,10 +316,8 @@
   border: none;
   border-top: 1px solid var(--rule);
   color: var(--muted);
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
@@ -396,12 +380,10 @@
 }
 
 .map-overlay-stats__label {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 4px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .map-overlay-stats__divider {
@@ -436,10 +418,9 @@
 }
 
 .map-area__empty-body {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.03em;
 }
 
 /* ── Loading / empty states ─────────────────────────────────────────────── */
@@ -524,11 +505,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   font-weight: 500;
   margin-bottom: 10px;
 }
@@ -536,7 +515,7 @@
 .venue-inspector__name {
   font-family: var(--font-display);
   font-size: 30px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.01em;
   line-height: 1.1;
@@ -561,11 +540,10 @@
 }
 
 .venue-inspector__coords {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
   margin-top: 4px;
-  letter-spacing: 0.04em;
 }
 
 .venue-inspector__close {
@@ -610,20 +588,17 @@
 }
 
 .venue-inspector__stat-label {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 6px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .venue-inspector__stat-sub {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
   margin-top: 2px;
-  letter-spacing: 0.02em;
 }
 
 /* Kind mix */
@@ -636,21 +611,17 @@
 }
 
 .venue-inspector__kindmix-label {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .venue-inspector__kindmix-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 500;
 }
 
@@ -663,19 +634,16 @@
 }
 
 .venue-inspector__visits-title {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--ink);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   font-weight: 500;
 }
 
 .venue-inspector__visits-count {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
 }
 
 .venue-inspector__visits-list {
@@ -703,11 +671,10 @@
 }
 
 .venue-inspector__visit-date-year {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
   margin-top: 3px;
-  letter-spacing: 0.04em;
 }
 
 .venue-inspector__visit-info {
@@ -726,19 +693,17 @@
 }
 
 .venue-inspector__visit-seat {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 2px;
-  letter-spacing: 0.02em;
 }
 
 .venue-inspector__visit-price {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   font-weight: 500;
-  font-feature-settings: "tnum";
 }
 
 /* CTA buttons */
@@ -752,8 +717,8 @@
 .venue-inspector__cta-follow {
   padding: 10px 12px;
   background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  border: 1px solid var(--ink);
+  color: var(--accent-strong);
   font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
   font-size: 12.5px;
   font-weight: 500;
@@ -769,9 +734,9 @@
 }
 
 .venue-inspector__cta-follow--following {
-  background: var(--accent);
+  background: var(--ink);
   color: var(--accent-text);
-  border-color: var(--accent);
+  border-color: var(--ink);
 }
 
 .venue-inspector__cta-follow--following:hover {
@@ -853,7 +818,7 @@
 
 /* Circle marker count labels — strip default Leaflet tooltip chrome */
 .map-circle-count {
-  font-family: var(--font-geist-mono, "Geist Mono", monospace);
+  font-feature-settings: "tnum";
   font-weight: 600;
   text-align: center;
   pointer-events: none;

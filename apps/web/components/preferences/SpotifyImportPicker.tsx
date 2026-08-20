@@ -10,7 +10,7 @@ const LOADING_STAGES = [
   "Almost ready",
 ];
 
-const mono = "var(--font-geist-mono)";
+const sans = "var(--font-geist-sans)";
 
 interface SpotifyImportPickerProps {
   flow: ReturnType<typeof useSpotifyImport>;
@@ -128,9 +128,8 @@ export function SpotifyImportPicker({
             display: "flex",
             alignItems: "center",
             gap: 14,
-            fontFamily: mono,
-            fontSize: 10.5,
-            letterSpacing: ".04em",
+            fontFamily: sans,
+            fontSize: 11.5,
             flexWrap: "wrap",
           }}
         >
@@ -187,7 +186,7 @@ export function SpotifyImportPicker({
               </button>
             )}
             {anySelected && !allMatchableSelected && (
-              <span style={{ color: "var(--faint)", fontFamily: mono, fontSize: 10 }}>
+              <span style={{ color: "var(--faint)", fontFamily: sans, fontSize: 11.5 }}>
                 ·
               </span>
             )}
@@ -225,10 +224,9 @@ export function SpotifyImportPicker({
             style={{
               padding: "32px 20px",
               textAlign: "center",
-              fontFamily: mono,
-              fontSize: 11,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".04em",
             }}
           >
             {trimmedQuery ? "No artists match your filter." : "No artists."}
@@ -315,14 +313,12 @@ export function SpotifyImportPicker({
                 {status && (
                   <div
                     style={{
-                      fontFamily: mono,
-                      fontSize: 10,
+                      fontFamily: sans,
+                      fontSize: 11.5,
                       color: artist.alreadyFollowed
                         ? "var(--muted)"
                         : "var(--faint)",
                       marginTop: 3,
-                      letterSpacing: ".04em",
-                      textTransform: "uppercase",
                     }}
                   >
                     {status}
@@ -349,16 +345,15 @@ export function SpotifyImportPicker({
       >
         <div
           style={{
-            fontFamily: mono,
-            fontSize: 11,
+            fontFamily: sans,
+            fontSize: 11.5,
             color: flow.selected.size > 0 ? "var(--ink)" : "var(--muted)",
-            letterSpacing: ".04em",
             fontWeight: flow.selected.size > 0 ? 500 : 400,
           }}
         >
           {flow.selected.size > 0 ? (
             <>
-              <span style={{ color: "var(--accent)" }}>
+              <span style={{ color: "var(--accent-strong)" }}>
                 {flow.selected.size}
               </span>{" "}
               selected
@@ -370,10 +365,9 @@ export function SpotifyImportPicker({
         {flow.error && (
           <div
             style={{
-              fontFamily: mono,
-              fontSize: 10.5,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "#E63946",
-              letterSpacing: ".04em",
               flex: 1,
               textAlign: "center",
             }}
@@ -426,7 +420,7 @@ function Stat({
       <span
         style={{
           fontWeight: emphasize ? 600 : 500,
-          color: emphasize ? "var(--accent)" : color,
+          color: emphasize ? "var(--accent-strong)" : color,
           fontFeatureSettings: '"tnum"',
         }}
       >
@@ -448,8 +442,8 @@ function Checkbox({ checked, disabled }: { checked: boolean; disabled?: boolean 
         width: 18,
         height: 18,
         border: "1.5px solid",
-        borderColor: checked ? "var(--accent)" : "var(--rule-strong)",
-        background: checked ? "var(--accent)" : "transparent",
+        borderColor: checked ? "var(--ink)" : "var(--rule-strong)",
+        background: checked ? "var(--ink)" : "transparent",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -465,31 +459,27 @@ function Checkbox({ checked, disabled }: { checked: boolean; disabled?: boolean 
 }
 
 const clearSearchStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
   color: "var(--muted)",
   background: "transparent",
   border: "none",
   padding: "2px 6px",
   cursor: "pointer",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   flexShrink: 0,
   transition: "color 0.12s",
 };
 
 const selectAllStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
   color: "var(--muted)",
   background: "transparent",
   border: "none",
   padding: 0,
   cursor: "pointer",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   flexShrink: 0,
   textDecoration: "underline",
   textDecorationColor: "var(--rule-strong)",
@@ -498,16 +488,14 @@ const selectAllStyle: React.CSSProperties = {
 };
 
 const importButtonStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 11,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 600,
   color: "var(--accent-text)",
-  background: "var(--accent)",
+  background: "var(--ink)",
   border: "none",
   borderRadius: 0,
   padding: "9px 16px",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   transition: "opacity 0.12s",
   whiteSpace: "nowrap",
 };
@@ -573,10 +561,9 @@ function SpotifyImportLoading({ compact }: { compact?: boolean }) {
           <span
             key={stageIndex}
             style={{
-              fontFamily: mono,
-              fontSize: 11,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".04em",
               animation: "spotify-load-fade .35s ease-out",
             }}
           >
@@ -642,7 +629,7 @@ const shimmerBarStyle: React.CSSProperties = {
   height: "100%",
   width: "40%",
   background:
-    "linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%)",
+    "linear-gradient(90deg, transparent 0%, var(--ink) 50%, transparent 100%)",
   animation: "spotify-load-bar 1.4s ease-in-out infinite",
 };
 
@@ -651,7 +638,7 @@ const spinnerStyle: React.CSSProperties = {
   height: 10,
   borderRadius: "50%",
   border: "1.5px solid var(--rule-strong)",
-  borderTopColor: "var(--accent)",
+  borderTopColor: "var(--ink)",
   display: "inline-block",
   animation: "spotify-load-spin .9s linear infinite",
 };

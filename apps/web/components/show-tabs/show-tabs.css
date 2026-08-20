@@ -35,21 +35,17 @@
 }
 
 .show-stat-cell__label {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
-  color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  color: var(--muted);
 }
 
 .show-stat-cell__value {
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 17px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.4px;
+  letter-spacing: -0.025em;
   margin-top: 4px;
-  font-feature-settings: "tnum";
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -62,11 +58,9 @@
 }
 
 .show-stat-cell__sub {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-size: 12.5px;
   color: var(--muted);
   margin-top: 3px;
-  letter-spacing: 0.02em;
 }
 
 /* Section frame used inside every tab body. */
@@ -83,27 +77,21 @@
 }
 
 .show-section__title {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-  color: var(--ink);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  font-weight: 500;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .show-section__count {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--faint);
-  letter-spacing: 0.04em;
   margin-left: 8px;
+  font-weight: 400;
 }
 
 .show-section__action {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
   cursor: pointer;
   background: transparent;
   border: none;
@@ -144,7 +132,7 @@
 }
 
 .setlist-banner__number--accent {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .setlist-banner__number--ink {
@@ -164,18 +152,15 @@
 }
 
 .setlist-banner__small-label {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .setlist-banner__small-value {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--ink);
-  letter-spacing: 0.04em;
 }
 
 .setlist-banner__source {
@@ -191,11 +176,9 @@
 }
 
 .setlist-banner__source-label {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .setlist-banner__source-line {
@@ -206,11 +189,10 @@
 }
 
 .setlist-banner__source-sub {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 3px;
-  letter-spacing: 0.02em;
 }
 
 /* Predicted / actual track row */
@@ -231,10 +213,9 @@
 }
 
 .predicted-row__pos {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  color: var(--faint);
   font-feature-settings: "tnum";
+  font-size: 11.5px;
+  color: var(--faint);
   text-align: right;
 }
 
@@ -265,13 +246,13 @@
 }
 
 .track-preview:hover:not(:disabled):not(.track-preview--active) {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--ink);
+  color: var(--accent-strong);
 }
 
 .track-preview--active {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--ink);
+  color: var(--accent-strong);
 }
 
 .track-preview--unavailable {
@@ -293,7 +274,7 @@
 
 .track-preview__bar {
   width: 1.5px;
-  background: var(--accent);
+  background: var(--ink);
   transform-origin: bottom;
   animation: track-preview-bar 1s infinite;
 }
@@ -333,11 +314,10 @@
 }
 
 .predicted-row__evidence {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 2px;
-  letter-spacing: 0.02em;
 }
 
 /* Phase 2 — inline song badges. Sit alongside the evidence string so
@@ -350,42 +330,39 @@
   max-width: 100%;
 }
 .predicted-row__title-link:hover .predicted-row__title {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .predicted-row__badge {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   white-space: nowrap;
   cursor: help;
 }
 .predicted-row__badge--first-time {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 .predicted-row__badge--rare {
   color: var(--ink);
 }
 /* Phase 11 §15j — personal-weight chips */
 .predicted-row__badge--saved {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 .predicted-row__badge--personal-first-time {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--accent-strong);
+  border-color: var(--ink);
 }
 .predicted-row__badge--top-track {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--accent-strong);
+  border-color: var(--ink);
 }
 
 /* Phase 11 §15f — set-count strip rendered above the predicted setlist
  * for every prediction style. */
 .set-count-strip {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   padding: 16px var(--page-pad-x);
   border-bottom: 1px solid var(--rule);
@@ -410,9 +387,7 @@
 }
 .special-event-card__title {
   font-size: 14px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-strong);
   margin: 0 0 12px 0;
 }
 .special-event-card__copy {
@@ -422,10 +397,8 @@
   margin: 0 0 20px 0;
 }
 .special-event-card__past-title {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin: 0 0 8px 0;
 }
@@ -457,9 +430,7 @@
   border-top: 1px solid var(--rule);
 }
 .songs-youd-want-to-hear__title {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
   color: var(--muted);
   margin: 0 0 12px 0;
 }
@@ -478,11 +449,9 @@
 }
 
 .encore-divider__label {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
-  color: var(--accent);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
+  color: var(--accent-strong);
   font-weight: 500;
 }
 
@@ -512,17 +481,16 @@
 }
 
 .spoiler-curtain__body {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   max-width: 360px;
-  letter-spacing: 0.02em;
   line-height: 1.6;
 }
 
 .spoiler-curtain__primary {
   padding: 10px 18px;
-  background: var(--accent);
+  background: var(--ink);
   color: var(--accent-text);
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 13px;
@@ -532,8 +500,8 @@
 }
 
 .spoiler-curtain__settings {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   background: transparent;
   border: none;
@@ -579,10 +547,9 @@
 }
 
 .hype-card__brand {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  color: var(--accent);
-  letter-spacing: 0.18em;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
+  color: var(--accent-strong);
 }
 
 .hype-card__cover-title {
@@ -597,7 +564,7 @@
 .hype-card__bar {
   width: 14px;
   height: 2px;
-  background: var(--accent);
+  background: var(--ink);
 }
 
 .hype-card__body {
@@ -619,17 +586,16 @@
 }
 
 .hype-card__sub {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 6px;
-  letter-spacing: 0.02em;
   line-height: 1.5;
 }
 
 .hype-card__cta {
   padding: 9px 14px;
-  background: var(--accent);
+  background: var(--ink);
   color: var(--accent-text);
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 12.5px;
@@ -676,19 +642,16 @@
   padding: 16px;
   background: var(--surface);
   border: 1px dashed var(--rule-strong);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.02em;
   line-height: 1.6;
 }
 
 .rail-placeholder__title {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   margin-bottom: 6px;
 }
 
@@ -719,11 +682,9 @@
 }
 
 .fan-loyalty-ring__kicker {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .fan-loyalty-ring__count {
@@ -736,35 +697,31 @@
 }
 
 .fan-loyalty-ring__sub {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 3px;
-  letter-spacing: 0.02em;
 }
 
 .fan-loyalty-ring__empty {
   padding: 16px;
   background: var(--surface);
   border: 1px dashed var(--rule-strong);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.02em;
   line-height: 1.6;
 }
 
 .fan-loyalty-ring__empty-title {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   margin-bottom: 6px;
 }
 
 .fan-loyalty-ring__empty-body {
-  font-family: var(--font-geist-mono), monospace;
+  font-feature-settings: "tnum";
 }
 
 /* Phase 7 — Discovered-live rail (list rows) */
@@ -813,19 +770,17 @@
 }
 
 .discovered-row__meta {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 2px;
-  letter-spacing: 0.02em;
 }
 
 .discovered-row__error {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: #e63946;
   margin-top: 4px;
-  letter-spacing: 0.02em;
 }
 
 .discovered-row__save {
@@ -833,15 +788,14 @@
   background: transparent;
   border: 1px solid var(--rule-strong);
   color: var(--ink);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   cursor: pointer;
 }
 
 .discovered-row__save:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--ink);
+  color: var(--accent-strong);
 }
 
 .discovered-row__save:disabled {
@@ -853,10 +807,9 @@
   padding: 14px 16px;
   background: var(--surface);
   border: 1px dashed var(--rule-strong);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.02em;
   line-height: 1.6;
 }
 
@@ -866,10 +819,9 @@
 
 .discovered-rail__footer {
   padding: 10px 16px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.04em;
 }
 
 /* Phase 7 — priming stat (title block italic) */
@@ -910,7 +862,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: -0.1px;
   cursor: pointer;
@@ -935,7 +887,7 @@
 .festival-setlist-chip__sublabel {
   color: var(--muted);
   font-weight: 400;
-  font-size: 11px;
+  font-size: 11.5px;
 }
 
 .festival-setlist-chip--active .festival-setlist-chip__sublabel {
@@ -944,8 +896,8 @@
 }
 
 .festival-setlist-chip__count {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 400;
   color: var(--faint);
 }

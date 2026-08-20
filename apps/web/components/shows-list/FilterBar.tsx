@@ -1,7 +1,7 @@
 "use client";
 
 import type { ShowKind } from "@/components/design-system";
-import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { KIND_LABELS } from "@/lib/kind-icons";
 import { ALL_KINDS } from "./helpers";
 import "@/components/design-system/segmented-filter.css";
 
@@ -119,7 +119,6 @@ export function FilterBar({
           All kinds
         </button>
         {ALL_KINDS.map((k) => {
-          const KIcon = KIND_ICONS[k];
           const active = selectedKind === k;
           return (
             <button
@@ -130,7 +129,6 @@ export function FilterBar({
                 active ? `segmented-filter__btn--active-${k}` : ""
               }`}
             >
-              <KIcon size={12} color={active ? "var(--bg)" : `var(--kind-${k})`} />
               {KIND_LABELS[k]}
             </button>
           );
@@ -143,10 +141,9 @@ export function FilterBar({
       {/* Filtered count */}
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--faint)",
-          letterSpacing: ".04em",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 12.5,
+          color: "var(--muted)",
         }}
       >
         {filteredCount} show{filteredCount !== 1 ? "s" : ""}

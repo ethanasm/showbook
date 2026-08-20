@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
 import { TicketmasterMark } from "@/components/BrandIcons";
-import { DISCOVER_KIND_ICONS as KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { KIND_LABELS } from "@/lib/kind-icons";
 import { isNonWatchableKind } from "@showbook/shared";
 import {
   type Announcement,
@@ -40,7 +40,6 @@ export function AnnouncementRow({
   groupBy: "venue" | "artist" | "region";
 }) {
   const date = formatShowDateShort(announcement.showDate);
-  const KindIcon = KIND_ICONS[announcement.kind];
   const isOnSale =
     announcement.onSaleStatus === "on_sale" ||
     announcement.onSaleStatus === "presale";
@@ -62,7 +61,7 @@ export function AnnouncementRow({
       className={`discover-row discover-row--${announcement.kind} ${isWatching ? "discover-row--watched" : ""} ${runMode ? "discover-row--run" : ""} ${groupBy === "region" ? "discover-row--region" : ""} ${isSoldOut ? "discover-row--sold-out" : ""} ${isCancelled ? "discover-row--cancelled" : ""}`}
     >
       {/* Date */}
-      <div>
+      <div className="discover-row__date">
         {runMode && runDateLabel ? (
           <>
             <div className="discover-row__date-main" title={`${performanceCount} dates`}>
@@ -78,7 +77,7 @@ export function AnnouncementRow({
               {date.month} {date.day}
             </div>
             <div className="discover-row__date-sub">
-              {date.year} &middot; {date.dow}
+              {date.dow.toLowerCase()}
             </div>
           </>
         )}
@@ -88,7 +87,7 @@ export function AnnouncementRow({
       <div
         className={`discover-row__kind discover-row__kind--${announcement.kind}`}
       >
-        <KindIcon size={12} />
+        <span aria-hidden="true" className="discover-row__kind-swatch" />
         {KIND_LABELS[announcement.kind]}
       </div>
 

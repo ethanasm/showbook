@@ -138,18 +138,16 @@ export function OverviewTab({
                 display: "block",
                 padding: "16px 18px",
                 background: "var(--surface)",
-                borderLeft: "2px solid var(--accent)",
+                borderLeft: "2px solid var(--ink)",
                 color: "inherit",
                 textDecoration: "none",
               }}
             >
               <div
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--faint)",
-                  letterSpacing: ".14em",
-                  textTransform: "uppercase",
                 }}
               >
                 {entry.role}
@@ -168,11 +166,10 @@ export function OverviewTab({
               {entry.characterName && (
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--muted)",
                     marginTop: 4,
-                    letterSpacing: ".02em",
                   }}
                 >
                   as {entry.characterName}
@@ -183,10 +180,9 @@ export function OverviewTab({
           {lineup.length === 0 && (
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
-                letterSpacing: ".02em",
               }}
             >
               No performers listed yet.
@@ -201,7 +197,7 @@ export function OverviewTab({
             const style: React.CSSProperties = {
               padding: "10px 14px",
               background: action.primary
-                ? "var(--accent)"
+                ? "var(--accent-strong)"
                 : action.active
                   ? "var(--surface)"
                   : "transparent",

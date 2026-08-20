@@ -30,7 +30,8 @@ import {
   countFestivalActualSongs,
 } from "@/lib/show-accessors";
 import { MediaSection } from "@/components/media";
-import { TicketStatusBadge } from "@/components/design-system";
+import { KindSwatch, TicketStatusBadge } from "@/components/design-system";
+import type { DiscoverKindKey } from "@/lib/kind-icons";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
 import { DeleteShowConfirmModal } from "./DeleteShowConfirmModal";
@@ -643,24 +644,14 @@ function ShowHeaderStrip({
       }}
       data-testid="show-tabs-header"
     >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--muted)",
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {show.kind}
-      </div>
+      <KindSwatch kind={show.kind as DiscoverKindKey} />
       <h1
         className="display-title"
         style={{
           margin: 0,
-          fontSize: 44,
-          letterSpacing: -1.5,
-          lineHeight: 0.96,
+          fontSize: 42,
+          letterSpacing: "-0.038em",
+          lineHeight: 1.05,
           fontWeight: 600,
         }}
       >
@@ -695,10 +686,9 @@ function ShowHeaderStrip({
           {countdown && (
             <span
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--accent)",
-                letterSpacing: ".04em",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
+                color: "var(--accent-strong)",
               }}
             >
               {countdown}
@@ -707,10 +697,9 @@ function ShowHeaderStrip({
           {show.tourName && (
             <span
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
-                letterSpacing: ".04em",
               }}
             >
               · {show.tourName}
@@ -734,11 +723,9 @@ function ShowHeaderStrip({
               padding: "4px 10px",
               border: "1px solid var(--rule-strong)",
               color: "var(--muted)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               fontWeight: 500,
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
             }}
             data-testid="went-badge"
           >
@@ -748,13 +735,11 @@ function ShowHeaderStrip({
           <span
             style={{
               padding: "4px 10px",
-              background: "var(--accent)",
+              background: "var(--ink)",
               color: "var(--accent-text)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               fontWeight: 600,
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
             }}
           >
             tix
@@ -765,11 +750,9 @@ function ShowHeaderStrip({
               padding: "4px 10px",
               border: "1px solid var(--ink)",
               color: "var(--ink)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               fontWeight: 500,
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
             }}
           >
             watching

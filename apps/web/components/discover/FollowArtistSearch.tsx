@@ -109,8 +109,8 @@ export function FollowArtistSearch({
             border: "none",
             outline: "none",
             color: "var(--ink)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
           }}
         />
         <button
@@ -135,8 +135,8 @@ export function FollowArtistSearch({
           <div
             style={{
               padding: "6px 0",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
             }}
           >
@@ -171,7 +171,7 @@ export function FollowArtistSearch({
             <div
               style={{
                 fontFamily: "var(--font-geist-sans), sans-serif",
-                fontSize: 12,
+                fontSize: 12.5,
                 color: "var(--ink)",
                 fontWeight: 500,
               }}
@@ -186,8 +186,8 @@ export function FollowArtistSearch({
             <div
               style={{
                 padding: "6px 0",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
               }}
             >
@@ -201,15 +201,13 @@ export function FollowArtistSearch({
 
 const ctaButtonStyle: React.CSSProperties = {
   padding: "10px 18px",
-  background: "var(--accent)",
+  background: "var(--ink)",
   color: "var(--accent-text)",
   border: "none",
   borderRadius: 8,
   cursor: "pointer",
-  fontFamily: "var(--font-geist-mono), monospace",
-  fontSize: 11,
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 11.5,
   fontWeight: 500,
   display: "inline-flex",
   alignItems: "center",
