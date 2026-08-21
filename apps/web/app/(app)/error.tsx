@@ -29,11 +29,9 @@ export default function AppError({
             onClick={() => reset()}
             style={{
               padding: "8px 16px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               background: "var(--ink)",
               color: "var(--bg)",
               border: "1px solid var(--ink)",
@@ -46,11 +44,9 @@ export default function AppError({
             href="/home"
             style={{
               padding: "8px 16px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               background: "transparent",
               color: "var(--ink)",
               border: "1px solid var(--rule-strong)",
@@ -62,10 +58,9 @@ export default function AppError({
           {error.digest ? (
             <span
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
-                letterSpacing: ".06em",
               }}
             >
               ref: {error.digest}

@@ -24,7 +24,7 @@ export function RegionChip({
       style={{
         padding: "10px 14px",
         border: active
-          ? "1.5px solid var(--accent)"
+          ? "1.5px solid var(--ink)"
           : "1px solid var(--rule-strong)",
         background: active ? "var(--accent-faded)" : "transparent",
         display: "flex",
@@ -37,7 +37,7 @@ export function RegionChip({
     >
       <MapPin
         size={14}
-        color={active ? "var(--accent)" : "var(--faint)"}
+        color={active ? "var(--ink)" : "var(--faint)"}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
@@ -53,8 +53,8 @@ export function RegionChip({
         </div>
         <div
           style={{
-            fontFamily: "var(--font-geist-mono)",
-            fontSize: 10,
+            fontFamily: "var(--font-geist-sans)",
+            fontSize: 11.5,
             color: "var(--faint)",
             marginTop: 2,
           }}
@@ -62,7 +62,7 @@ export function RegionChip({
           {radius}mi radius
         </div>
       </div>
-      {active && <Check size={14} color="var(--accent)" />}
+      {active && <Check size={14} color="var(--accent-strong)" />}
       <button
         type="button"
         onClick={(e) => {

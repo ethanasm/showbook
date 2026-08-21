@@ -219,15 +219,13 @@ function SortableRow({
             <span
               style={{
                 background: "var(--accent-bg, var(--surface2))",
-                color: "var(--accent)",
+                color: "var(--accent-strong)",
                 padding: "2px 10px",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10,
-                letterSpacing: ".1em",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 fontWeight: 600,
-                textTransform: "uppercase",
                 borderRadius: 999,
-                border: "1px solid var(--accent)",
+                border: "1px solid var(--ink)",
               }}
             >
               Encore
@@ -243,10 +241,8 @@ function SortableRow({
               border: "1px solid var(--rule-strong)",
               color: "var(--muted)",
               padding: "3px 8px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               cursor: "pointer",
             }}
           >
@@ -294,10 +290,9 @@ function SortableRow({
       </button>
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".04em",
           fontFeatureSettings: '"tnum"',
         }}
       >
@@ -336,7 +331,7 @@ function SortableRow({
             outline: "none",
             color: "var(--muted)",
             fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12,
+            fontSize: 12.5,
             padding: 0,
           }}
         />
@@ -352,10 +347,8 @@ function SortableRow({
             border: "1px solid var(--rule-strong)",
             color: "var(--muted)",
             padding: "3px 8px",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             cursor: "pointer",
           }}
         >
@@ -528,11 +521,9 @@ export function SetlistSectionsEditor({
     >
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
           marginBottom: 6,
           display: "flex",
           alignItems: "center",
@@ -593,10 +584,8 @@ export function SetlistSectionsEditor({
             background: "transparent",
             border: "1px dashed var(--rule-strong)",
             color: "var(--muted)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             cursor: "pointer",
           }}
         >
@@ -617,10 +606,8 @@ export function SetlistSectionsEditor({
               background: "transparent",
               border: "1px solid var(--rule-strong)",
               color: "var(--muted)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               cursor: "pointer",
             }}
           >
@@ -645,11 +632,11 @@ export function SetlistSectionsEditor({
           data-testid="setlist-save"
           style={{
             padding: "7px 14px",
-            background: "var(--accent)",
-            color: "var(--accent-text)",
+            background: "var(--ink)",
+            color: "var(--bg)",
             border: "none",
             fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12,
+            fontSize: 12.5,
             fontWeight: 500,
             cursor: setSetlist.isPending || !dirty ? "default" : "pointer",
             opacity: setSetlist.isPending || !dirty ? 0.5 : 1,
@@ -667,7 +654,7 @@ export function SetlistSectionsEditor({
             border: "1px solid var(--rule-strong)",
             color: "var(--muted)",
             fontFamily: "var(--font-geist-sans), sans-serif",
-            fontSize: 12,
+            fontSize: 12.5,
             cursor: setSetlist.isPending || !dirty ? "default" : "pointer",
             opacity: setSetlist.isPending || !dirty ? 0.5 : 1,
           }}
@@ -686,7 +673,7 @@ export function SetlistSectionsEditor({
               border: "1px solid var(--rule-strong)",
               color: "#E63946",
               fontFamily: "var(--font-geist-sans), sans-serif",
-              fontSize: 12,
+              fontSize: 12.5,
               cursor: setSetlist.isPending ? "default" : "pointer",
               marginLeft: "auto",
             }}
@@ -700,8 +687,8 @@ export function SetlistSectionsEditor({
         <div
           style={{
             color: "#E63946",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             marginTop: 8,
           }}
         >

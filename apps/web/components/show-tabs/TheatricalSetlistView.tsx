@@ -137,10 +137,9 @@ function CopyBlock({ copy }: { copy: string }) {
       data-testid="theatrical-copy"
       style={{
         padding: "14px var(--page-pad-x) 6px",
-        fontFamily: "var(--font-geist-mono), monospace",
+        fontFamily: "var(--font-geist-sans), sans-serif",
         fontSize: 11.5,
         color: "var(--muted)",
-        letterSpacing: ".02em",
         lineHeight: 1.6,
       }}
     >
@@ -151,8 +150,8 @@ function CopyBlock({ copy }: { copy: string }) {
 
 /**
  * ActDivider — same chrome as `EncoreDivider` from Phase 1. Used for
- * Act I, Act II, Encore, etc. The label is centered with mono caps
- * tracking.
+ * Act I, Act II, Encore, etc. The label is a centered small label
+ * between two hairlines.
  */
 export function ActDivider({ label }: { label: string }) {
   return (
@@ -168,11 +167,9 @@ export function ActDivider({ label }: { label: string }) {
     >
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10,
-          color: "var(--accent)",
-          letterSpacing: ".18em",
-          textTransform: "uppercase",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
+          color: "var(--muted)",
           fontWeight: 500,
         }}
       >
@@ -215,8 +212,8 @@ function TheatricalRow({
     >
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
         }}
       >
@@ -233,8 +230,8 @@ function TheatricalRow({
       </span>
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
         }}
       >
@@ -274,25 +271,23 @@ export function RotatingSlotCard({
       >
         <span
           aria-hidden="true"
-          style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 12 }}
+          style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 12.5 }}
         >
           ⭐
         </span>
         <span
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
-            color: "var(--accent)",
-            letterSpacing: ".14em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
+            color: "var(--accent-strong)",
           }}
         >
           {slot.slotName}
         </span>
         <span
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
           }}
         >
@@ -350,7 +345,7 @@ function CandidateRow({
       >
         <div
           style={{
-            background: "var(--accent)",
+            background: "var(--ink)",
             height: 4,
             width: `${pct}%`,
           }}
@@ -358,8 +353,8 @@ function CandidateRow({
       </div>
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
         }}
       >

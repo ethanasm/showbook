@@ -79,14 +79,17 @@ describe('ShowTabBar', () => {
     cleanup();
   });
 
-  test('badge color follows active state (active tab uses accent ring)', () => {
+  test('badges are plain muted numbers, not ringed pills', () => {
     const { getByTestId } = renderBar({
       active: 'setlist',
       badges: { overview: null, setlist: '92%', media: '0', notes: null },
     });
+    // The active tab is marked by its underline and 600 label; the count
+    // beside it carries no border and no accent of its own.
     const activeBadge = getByTestId('show-tab-setlist-badge');
-    // border should include accent token
-    assert.match(activeBadge.getAttribute('style') ?? '', /var\(--accent\)/);
+    const style = activeBadge.getAttribute('style') ?? '';
+    assert.match(style, /var\(--muted\)/);
+    assert.doesNotMatch(style, /border/);
     cleanup();
   });
 

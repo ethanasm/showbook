@@ -5,7 +5,7 @@ import { Music, X } from "lucide-react";
 import { SpotifyImportPicker } from "./SpotifyImportPicker";
 import { useSpotifyImport } from "./useSpotifyImport";
 
-const mono = "var(--font-geist-mono)";
+const sans = "var(--font-geist-sans)";
 
 interface SpotifyImportModalProps {
   open: boolean;
@@ -98,7 +98,7 @@ export function SpotifyImportModal({
                 justifyContent: "center",
                 background: "var(--surface2)",
                 border: "1px solid var(--rule)",
-                color: "var(--accent)",
+                color: "var(--accent-strong)",
                 flexShrink: 0,
                 borderRadius: 6,
               }}
@@ -162,10 +162,9 @@ export function SpotifyImportModal({
               {flow.importedCount !== null && (
                 <div
                   style={{
-                    fontFamily: mono,
-                    fontSize: 11,
-                    color: "var(--accent)",
-                    letterSpacing: ".04em",
+                    fontFamily: sans,
+                    fontSize: 11.5,
+                    color: "var(--accent-strong)",
                   }}
                 >
                   Imported {flow.importedCount} artist
@@ -175,10 +174,9 @@ export function SpotifyImportModal({
               {flow.error && (
                 <div
                   style={{
-                    fontFamily: mono,
-                    fontSize: 11,
+                    fontFamily: sans,
+                    fontSize: 11.5,
                     color: "#E63946",
-                    letterSpacing: ".04em",
                   }}
                 >
                   {flow.error}
@@ -223,17 +221,15 @@ const connectButtonStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  fontFamily: "var(--font-geist-mono), monospace",
-  fontSize: 11,
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 11.5,
   fontWeight: 600,
-  color: "var(--accent-text)",
-  background: "var(--accent)",
+  color: "var(--bg)",
+  background: "var(--ink)",
   border: "none",
   borderRadius: 0,
   padding: "10px 18px",
   cursor: "pointer",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
   transition: "opacity 0.12s",
   marginTop: 4,
 };

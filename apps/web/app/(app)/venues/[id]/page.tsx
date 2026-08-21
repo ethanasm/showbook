@@ -32,12 +32,12 @@ import {
 import { MediaSection } from "@/components/media";
 import {
   formatDateMedium as formatDateLong,
-  formatDateParts,
   formatOnSaleDate,
   formatVenueLocation,
   isVenuePlaceholder,
   InputMaxLength,
 } from "@showbook/shared";
+import { formatDateParts } from "@/lib/date-parts";
 
 type Performer = {
   id: string;
@@ -266,7 +266,7 @@ export default function VenueDetailPage() {
             style={{
               background: "none",
               border: "none",
-              color: "var(--accent)",
+              color: "var(--accent-strong)",
               cursor: "pointer",
               fontFamily: "inherit",
               fontSize: "inherit",
@@ -295,15 +295,14 @@ export default function VenueDetailPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".04em",
         }}
       >
         <Link href="/venues" style={{ color: "var(--muted)", textDecoration: "none" }}>← venues</Link>
         <span style={{ color: "var(--faint)" }}>/</span>
-        <span style={{ color: "var(--ink)" }}>{venue.name.toLowerCase()}</span>
+        <span style={{ color: "var(--ink)" }}>{venue.name}</span>
       </div>
 
       {/* Hero — small image + title + eyebrow, Follow on right */}
@@ -353,11 +352,10 @@ export default function VenueDetailPage() {
             {locationLine && (
               <div
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: 11.5,
                   color: "var(--muted)",
                   marginTop: 6,
-                  letterSpacing: ".02em",
                 }}
               >
                 {locationLine}
@@ -374,10 +372,9 @@ export default function VenueDetailPage() {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: 11.5,
                   color: "var(--muted)",
-                  letterSpacing: ".02em",
                   textAlign: "left",
                 }}
                 title={`Reset to “${venue.canonicalName}”`}
@@ -416,7 +413,7 @@ export default function VenueDetailPage() {
             isFollowed={venue.isFollowed}
             isLoading={followBusy}
             onToggle={toggleFollow}
-            variant="mono"
+            variant="compact"
           />
         </div>
       </div>
@@ -450,7 +447,7 @@ export default function VenueDetailPage() {
             <span
               style={{
                 color:
-                  venue.upcomingCount > 0 ? "var(--accent)" : "var(--ink)",
+                  venue.upcomingCount > 0 ? "var(--accent-strong)" : "var(--ink)",
               }}
             >
               {venue.upcomingCount}
@@ -472,23 +469,19 @@ export default function VenueDetailPage() {
       >
         <span
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             padding: "3px 8px",
-            border: `1px solid ${venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)"}`,
-            color: venue.ticketmasterVenueId ? "var(--accent)" : "var(--faint)",
+            border: `1px solid ${venue.ticketmasterVenueId ? "var(--ink)" : "var(--faint)"}`,
+            color: venue.ticketmasterVenueId ? "var(--ink)" : "var(--faint)",
           }}
         >
           {venue.ticketmasterVenueId ? "TM linked" : "No TM ID"}
         </span>
         <span
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             padding: "3px 8px",
             border: `1px solid ${venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)"}`,
             color: venue.googlePlaceId ? "var(--kind-concert)" : "var(--faint)",
@@ -501,10 +494,8 @@ export default function VenueDetailPage() {
             href={`/map?venue=${venue.id}`}
             data-testid="view-on-map"
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               padding: "3px 8px",
               border: "1px solid var(--rule-strong)",
               color: "var(--muted)",
@@ -565,11 +556,9 @@ export default function VenueDetailPage() {
                 columnGap: 16,
                 padding: "10px 20px 10px 10px",
                 borderBottom: "1px solid var(--rule)",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 9.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
-                letterSpacing: ".12em",
-                textTransform: "uppercase",
               }}>
                 <div />
                 <div />
@@ -646,11 +635,9 @@ export default function VenueDetailPage() {
                   columnGap: 16,
                   padding: "10px 16px",
                   borderBottom: "1px solid var(--rule)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--faint)",
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
                 }}
               >
                 <div>Show date</div>
@@ -680,10 +667,9 @@ export default function VenueDetailPage() {
                     <div>
                       <div
                         style={{
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 12,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 12.5,
                           color: "var(--ink)",
-                          letterSpacing: ".02em",
                           fontFeatureSettings: '"tnum"',
                         }}
                       >
@@ -691,8 +677,8 @@ export default function VenueDetailPage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 10,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
                           color: "var(--muted)",
                           marginTop: 2,
                           textTransform: "lowercase",
@@ -707,11 +693,9 @@ export default function VenueDetailPage() {
                           display: "inline-flex",
                           alignItems: "center",
                           gap: 6,
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 10.5,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
                           color: `var(--kind-${a.kind})`,
-                          letterSpacing: ".06em",
-                          textTransform: "uppercase",
                         }}
                       >
                         <KindIcon size={12} />
@@ -756,8 +740,8 @@ export default function VenueDetailPage() {
                       {a.support && a.support.length > 0 && (
                         <div
                           style={{
-                            fontFamily: "var(--font-geist-mono), monospace",
-                            fontSize: 10.5,
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 11.5,
                             color: "var(--muted)",
                             marginTop: 2,
                           }}
@@ -769,9 +753,9 @@ export default function VenueDetailPage() {
                     {!isMobile && (
                       <div
                         style={{
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 11,
-                          color: isOnSale ? "var(--accent)" : "var(--muted)",
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
+                          color: isOnSale ? "var(--accent-strong)" : "var(--muted)",
                           fontWeight: isOnSale ? 500 : 400,
                         }}
                       >
@@ -781,11 +765,9 @@ export default function VenueDetailPage() {
                     <div>
                       <span
                         style={{
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 10,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
                           color: "var(--ink)",
-                          letterSpacing: ".06em",
-                          textTransform: "uppercase",
                           padding: "3px 8px",
                           border: `1px solid var(--kind-${a.kind})`,
                         }}
@@ -814,11 +796,9 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 9.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
           marginBottom: 6,
         }}
       >
@@ -845,10 +825,9 @@ function CardMessage({ children }: { children: React.ReactNode }) {
       style={{
         padding: "24px 16px",
         background: "var(--surface)",
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 11.5,
         color: "var(--muted)",
-        letterSpacing: ".04em",
       }}
     >
       {children}
@@ -871,10 +850,9 @@ function AdminCanonicalName({
   const [draft, setDraft] = useState(canonicalName);
 
   const sharedStyle: React.CSSProperties = {
-    fontFamily: "var(--font-geist-mono), monospace",
+    fontFamily: "var(--font-geist-sans), sans-serif",
     fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".02em",
   };
 
   if (editing) {
@@ -902,7 +880,7 @@ function AdminCanonicalName({
           width: "100%",
           background: "transparent",
           border: "none",
-          borderBottom: "1px solid var(--accent)",
+          borderBottom: "1px solid var(--ink)",
           outline: "none",
           padding: 0,
         }}
@@ -959,10 +937,9 @@ function AdminVenueLocation({
   const [countryDraft, setCountryDraft] = useState(country);
 
   const labelStyle: React.CSSProperties = {
-    fontFamily: "var(--font-geist-mono), monospace",
+    fontFamily: "var(--font-geist-sans), sans-serif",
     fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".02em",
   };
 
   function startEditing() {
@@ -994,7 +971,7 @@ function AdminVenueLocation({
     ...labelStyle,
     background: "transparent",
     border: "none",
-    borderBottom: "1px solid var(--accent)",
+    borderBottom: "1px solid var(--ink)",
     outline: "none",
     padding: "2px 0",
     minWidth: 0,
@@ -1047,7 +1024,7 @@ function AdminVenueLocation({
           onClick={commit}
           style={{
             ...labelStyle,
-            color: "var(--accent)",
+            color: "var(--accent-strong)",
             background: "none",
             border: "none",
             cursor: "pointer",
@@ -1074,7 +1051,7 @@ function AdminVenueLocation({
         border: "none",
         cursor: "pointer",
         textAlign: "left",
-        color: needsCity ? "var(--accent)" : "var(--muted)",
+        color: needsCity ? "var(--accent-strong)" : "var(--muted)",
       }}
       title="Edit the city / region / country everyone sees"
     >

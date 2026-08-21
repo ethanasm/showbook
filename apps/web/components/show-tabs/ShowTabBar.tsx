@@ -11,17 +11,18 @@ interface ShowTabBarProps {
 }
 
 const TABS: { key: ShowTabKey; label: string }[] = [
-  { key: "overview", label: "overview" },
-  { key: "setlist", label: "setlist" },
-  { key: "media", label: "media" },
-  { key: "notes", label: "notes" },
+  { key: "overview", label: "Overview" },
+  { key: "setlist", label: "Setlist" },
+  { key: "media", label: "Media" },
+  { key: "notes", label: "Notes" },
 ];
 
 /**
  * Sticky tab bar — labels never change across pre/post show, only the
- * badge content does. Active tab gets a 2px accent-gold underline plus
- * accent-colored badge ring. Hover and focus light up muted-foreground
- * for non-active tabs.
+ * badge content does. The active tab is marked by a 2px `--ink` underline
+ * and a 600 label; the counts beside each label are plain numbers rather
+ * than ringed badges. Hover and focus light up muted-foreground for
+ * non-active tabs.
  */
 export function ShowTabBar({ active, badges, onSelect, hiddenTabs }: ShowTabBarProps) {
   const hidden = new Set(hiddenTabs ?? []);
@@ -61,18 +62,17 @@ export function ShowTabBar({ active, badges, onSelect, hiddenTabs }: ShowTabBarP
               background: "transparent",
               border: "none",
               borderBottom: isActive
-                ? "2px solid var(--accent)"
+                ? "2px solid var(--ink)"
                 : "2px solid transparent",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
-              letterSpacing: ".04em",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 13.5,
               color: isActive ? "var(--ink)" : "var(--muted)",
-              fontWeight: isActive ? 500 : 400,
+              fontWeight: isActive ? 600 : 400,
+              letterSpacing: "-0.01em",
               display: "inline-flex",
               alignItems: "center",
               gap: 7,
               cursor: "pointer",
-              textTransform: "lowercase",
             }}
           >
             <span>{tab.label}</span>
@@ -80,12 +80,10 @@ export function ShowTabBar({ active, badges, onSelect, hiddenTabs }: ShowTabBarP
               <span
                 data-testid={`show-tab-${tab.key}-badge`}
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
-                  color: isActive ? "var(--accent)" : "var(--faint)",
-                  padding: "1px 6px",
-                  border: `1px solid ${isActive ? "var(--accent)" : "var(--rule-strong)"}`,
-                  letterSpacing: ".04em",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 12,
+                  color: "var(--muted)",
+                  fontWeight: 400,
                 }}
               >
                 {badge}

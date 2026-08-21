@@ -10,7 +10,7 @@ import { AddShowGmail, useAddShowGmail } from "@/components/add/AddShowGmail";
 import { MediaUploadSection } from "@/components/add/MediaUploadSection";
 import { useAddShowForm } from "./useAddShowForm";
 import { useDismissableFlag } from "@/lib/dismissable-flag";
-import { IMPORT_SOURCES, KIND_CONFIG, TIMEFRAME_CONFIG, mono, sans } from "./constants";
+import { IMPORT_SOURCES, KIND_CONFIG, TIMEFRAME_CONFIG, sans } from "./constants";
 
 // ── Main Component ───────────────────────────────────────────
 
@@ -108,11 +108,9 @@ export default function AddPage() {
       <div style={{ display: "flex", alignItems: "flex-end", gap: 20, marginBottom: 20 }}>
         <div>
           <div style={{
-            fontFamily: mono,
-            fontSize: 10.5,
+            fontFamily: sans,
+            fontSize: 11.5,
             color: "var(--muted)",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
           }}>
             {isEditMode ? "Editing record" : "New record · draft"}
           </div>
@@ -142,10 +140,8 @@ export default function AddPage() {
                   padding: "7px 14px",
                   background: mode === m ? "var(--ink)" : "transparent",
                   color: mode === m ? "var(--bg)" : "var(--muted)",
-                  fontFamily: mono,
-                  fontSize: 11,
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   fontWeight: 500,
                   border: "none",
                   borderLeft: i === 0 ? "none" : `1px solid var(--rule-strong)`,
@@ -208,13 +204,11 @@ export default function AddPage() {
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{
-                    fontFamily: mono,
-                    fontSize: 9.5,
+                    fontFamily: sans,
+                    fontSize: 11.5,
                     color: (src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--muted)",
-                    letterSpacing: ".1em",
                     padding: "2px 5px",
                     border: `1px solid ${(src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--rule-strong)"}`,
-                    textTransform: "uppercase",
                   }}>
                     {src.tag}
                   </div>
@@ -229,10 +223,9 @@ export default function AddPage() {
                   </div>
                 </div>
                 <div style={{
-                  fontFamily: mono,
-                  fontSize: 10,
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   color: (src.tag === "mail" && gmail.scanning) || (src.tag === "url" && importUrlOpen) || (src.tag === "pdf" && pdfImporting) ? "var(--bg)" : "var(--faint)",
-                  letterSpacing: ".04em",
                 }}>
                   {src.sub}
                 </div>
@@ -249,7 +242,7 @@ export default function AddPage() {
             style={{ display: "none" }}
           />
           {pdfError && (
-            <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
+            <div style={{ fontFamily: sans, fontSize: 11.5, color: "#E63946", marginTop: 6 }}>
               {pdfError}
             </div>
           )}
@@ -280,7 +273,7 @@ export default function AddPage() {
                     background: "transparent",
                     border: "none",
                     outline: "none",
-                    fontFamily: mono,
+                    fontFamily: sans,
                     fontSize: 13,
                     color: "var(--ink)",
                     letterSpacing: -0.1,
@@ -294,10 +287,8 @@ export default function AddPage() {
                     padding: "6px 12px",
                     background: importUrlValue.trim() ? "var(--ink)" : "var(--surface2)",
                     color: importUrlValue.trim() ? "var(--bg)" : "var(--faint)",
-                    fontFamily: mono,
-                    fontSize: 10.5,
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase" as const,
+                    fontFamily: sans,
+                    fontSize: 11.5,
                     border: "none",
                     cursor: importUrlValue.trim() ? "pointer" : "not-allowed",
                   }}
@@ -306,7 +297,7 @@ export default function AddPage() {
                 </button>
               </div>
               {fetchTMEvent.isError && (
-                <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 6 }}>
+                <div style={{ fontFamily: sans, fontSize: 11.5, color: "#E63946", marginTop: 6 }}>
                   {fetchTMEvent.error?.message?.includes("not found")
                     ? "Event not found. Check the URL and try again."
                     : "Failed to import. Check the URL and try again."}
@@ -372,21 +363,18 @@ export default function AddPage() {
                   display: "flex",
                   alignItems: "center",
                   gap: 8,
-                  fontFamily: mono,
-                  fontSize: 10.5,
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   color: c,
-                  letterSpacing: ".08em",
-                  textTransform: "uppercase",
                   fontWeight: 500,
                 }}>
                   <span style={{ fontSize: 14 }}>{k.icon}</span>
                   {k.label}
                 </div>
                 <div style={{
-                  fontFamily: mono,
-                  fontSize: 10,
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   color: active ? "var(--muted)" : "var(--faint)",
-                  letterSpacing: ".02em",
                 }}>
                   {k.enrichmentHint}
                 </div>
@@ -456,22 +444,20 @@ export default function AddPage() {
               onClick={() => festivalFileInputRef.current?.click()}
               disabled={festivalFlow.phase === "extracting"}
               style={{
-                fontFamily: mono,
-                fontSize: 11,
+                fontFamily: sans,
+                fontSize: 11.5,
                 fontWeight: 600,
-                color: "var(--accent-text)",
-                background: "var(--accent)",
+                color: "var(--bg)",
+                background: "var(--ink)",
                 border: "none",
                 padding: "9px 14px",
                 cursor: festivalFlow.phase === "extracting" ? "wait" : "pointer",
-                letterSpacing: ".08em",
-                textTransform: "uppercase",
                 opacity: festivalFlow.phase === "extracting" ? 0.6 : 1,
               }}
             >
               {festivalFlow.phase === "extracting" ? "Reading…" : "Upload poster"}
             </button>
-            <span style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".04em" }}>
+            <span style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
               {festivalFlow.rows.length > 0
                 ? `${festivalFlow.rows.length} artists extracted · ${performers.length} added`
                 : "drop the poster image or schedule PDF — pick who you saw"}
@@ -481,16 +467,14 @@ export default function AddPage() {
                 type="button"
                 onClick={() => setFestivalModalOpen(true)}
                 style={{
-                  fontFamily: mono,
-                  fontSize: 10.5,
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   fontWeight: 500,
                   color: "var(--muted)",
                   background: "transparent",
                   border: "none",
                   padding: 0,
                   cursor: "pointer",
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
                   textDecoration: "underline",
                   textDecorationColor: "var(--rule-strong)",
                   textUnderlineOffset: 3,
@@ -517,7 +501,7 @@ export default function AddPage() {
             columnGap: 14,
             alignItems: "center",
           }}>
-            <div style={{ color: "var(--faint)", fontFamily: mono, fontSize: 11 }}>⋮⋮</div>
+            <div style={{ color: "var(--faint)", fontFamily: sans, fontSize: 11.5 }}>⋮⋮</div>
             <input
               type="text"
               placeholder="Search for an artist or show..."
@@ -538,11 +522,9 @@ export default function AddPage() {
               }}
             />
             <div style={{
-              fontFamily: mono,
-              fontSize: 10.5,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
             }}>
               headliner
             </div>
@@ -574,7 +556,7 @@ export default function AddPage() {
                 <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
                   Use &quot;{headlinerName}&quot;
                 </span>
-                <span style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)" }}>
+                <span style={{ fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>
                   enter details manually
                 </span>
               </button>
@@ -582,7 +564,7 @@ export default function AddPage() {
               {kind === "festival" ? (
                 <>
                   {festivalHeadlinerSearch.isLoading && (
-                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                    <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
                       Searching artists...
                     </div>
                   )}
@@ -614,7 +596,7 @@ export default function AddPage() {
                     </button>
                   ))}
                   {festivalHeadlinerSearch.data && festivalHeadlinerSearch.data.length === 0 && (
-                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                    <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>
                       No matching artists found
                     </div>
                   )}
@@ -622,7 +604,7 @@ export default function AddPage() {
               ) : (
                 <>
                   {tmSearch.isLoading && (
-                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                    <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
                       Searching upcoming events...
                     </div>
                   )}
@@ -649,7 +631,7 @@ export default function AddPage() {
                       <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
                         {result.name}
                       </div>
-                      <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                      <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>
                         {result.venueName && `${result.venueName}`}
                         {result.venueCity && ` · ${result.venueCity}`}
                         {result.date && ` · ${result.date}`}
@@ -657,7 +639,7 @@ export default function AddPage() {
                     </button>
                   ))}
                   {tmSearch.data && tmSearch.data.length === 0 && (
-                    <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                    <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>
                       No upcoming events found
                     </div>
                   )}
@@ -681,7 +663,7 @@ export default function AddPage() {
                 borderTop: `1px solid var(--rule)`,
               }}
             >
-              <div style={{ color: "var(--faint)", fontFamily: mono, fontSize: 11 }}>⋮⋮</div>
+              <div style={{ color: "var(--faint)", fontFamily: sans, fontSize: 11.5 }}>⋮⋮</div>
               <div>
                 <div style={{ fontFamily: sans, fontSize: 14, fontWeight: p.role === "headliner" ? 600 : 500, color: "var(--ink)", letterSpacing: -0.15 }}>
                   {p.name}
@@ -710,7 +692,7 @@ export default function AddPage() {
                 )}
               </div>
               {p.role === "cast" ? (
-                <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".06em", textTransform: "uppercase" }}>
+                <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
                   {p.role}
                 </div>
               ) : (
@@ -719,11 +701,9 @@ export default function AddPage() {
                   onClick={() => handleTogglePerformerRole(i)}
                   title="Toggle headliner / support"
                   style={{
-                    fontFamily: mono,
-                    fontSize: 10.5,
+                    fontFamily: sans,
+                    fontSize: 11.5,
                     color: "var(--muted)",
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
                     background: "transparent",
                     border: "none",
                     padding: 0,
@@ -734,10 +714,9 @@ export default function AddPage() {
                 </button>
               )}
               <div style={{
-                fontFamily: mono,
-                fontSize: 10,
+                fontFamily: sans,
+                fontSize: 11.5,
                 color: p.tmAttractionId || p.wikidataQid ? "var(--kind-festival)" : "var(--faint)",
-                letterSpacing: ".04em",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 4,
@@ -749,7 +728,7 @@ export default function AddPage() {
                 onClick={() => handleRemovePerformer(i)}
                 style={{
                   color: "var(--faint)",
-                  fontFamily: mono,
+                  fontFamily: sans,
                   fontSize: 13,
                   cursor: "pointer",
                   background: "none",
@@ -798,13 +777,11 @@ export default function AddPage() {
             />
             {kind === "concert" && (
               <div style={{
-                fontFamily: mono,
-                fontSize: 10,
+                fontFamily: sans,
+                fontSize: 11.5,
                 color: "var(--faint)",
-                letterSpacing: ".06em",
                 padding: "2px 6px",
                 border: `1px solid var(--rule-strong)`,
-                textTransform: "uppercase",
               }}>
                 setlist.fm
               </div>
@@ -836,12 +813,12 @@ export default function AddPage() {
                 <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
                   Add &quot;{performerSearchInput}&quot;
                 </span>
-                <span style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)" }}>
+                <span style={{ fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>
                   enter manually
                 </span>
               </button>
               {performerArtistSearch.isLoading && (
-                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+                <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
                   Searching artists...
                 </div>
               )}
@@ -874,7 +851,7 @@ export default function AddPage() {
                     {/* Wikidata disambiguation, e.g. "American actor" — lets
                         the user pick the right same-named person. */}
                     {"subtitle" in artist && artist.subtitle && (
-                      <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {artist.subtitle}
                       </div>
                     )}
@@ -882,7 +859,7 @@ export default function AddPage() {
                 </button>
               ))}
               {performerArtistSearch.data && performerArtistSearch.data.length === 0 && !performerArtistSearch.isLoading && (
-                <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+                <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>
                   No matching artists found
                 </div>
               )}
@@ -934,7 +911,7 @@ export default function AddPage() {
             maxHeight: 240, overflow: "auto",
           }}>
             {venueSearch.isLoading && (
-              <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--muted)" }}>
+              <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
                 Searching venues...
               </div>
             )}
@@ -951,13 +928,13 @@ export default function AddPage() {
                 <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)" }}>
                   {place.displayName}
                 </div>
-                <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+                <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>
                   {place.formattedAddress}
                 </div>
               </button>
             ))}
             {venueSearch.data && venueSearch.data.length === 0 && (
-              <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: "var(--faint)" }}>
+              <div style={{ padding: "10px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>
                 No venues found
               </div>
             )}
@@ -991,7 +968,7 @@ export default function AddPage() {
                   background: "transparent",
                   border: "none",
                   outline: "none",
-                  fontFamily: mono,
+                  fontFamily: sans,
                   fontSize: 13,
                   color: date ? "var(--ink)" : "var(--faint)",
                   letterSpacing: -0.1,
@@ -1034,10 +1011,9 @@ export default function AddPage() {
                         {tf.label}
                       </div>
                       <div style={{
-                        fontFamily: mono,
-                        fontSize: 10,
+                        fontFamily: sans,
+                        fontSize: 11.5,
                         color: "var(--faint)",
-                        letterSpacing: ".04em",
                         marginTop: 2,
                       }}>
                         {tf.sub}
@@ -1078,7 +1054,7 @@ export default function AddPage() {
                     background: "transparent",
                     border: "none",
                     outline: "none",
-                    fontFamily: mono,
+                    fontFamily: sans,
                     fontSize: 13,
                     color: endDate ? "var(--ink)" : "var(--faint)",
                     minWidth: 0,
@@ -1218,32 +1194,32 @@ export default function AddPage() {
               accept="image/*"
               onChange={handlePlaybillUpload}
               style={{
-                fontFamily: mono,
-                fontSize: 12,
+                fontFamily: sans,
+                fontSize: 12.5,
                 color: "var(--muted)",
                 cursor: "pointer",
               }}
             />
             {extractCast.isPending && (
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 8 }}>
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", marginTop: 8 }}>
                 Extracting cast from photo...
               </div>
             )}
             {extractCast.isError && (
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: "#E63946", marginTop: 8 }}>
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: "#E63946", marginTop: 8 }}>
                 Could not extract cast. Add manually above.
               </div>
             )}
           </div>
           {castMembers.length > 0 && (
             <div style={{ marginTop: 8 }}>
-              <div style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)", letterSpacing: ".06em", marginBottom: 6, textTransform: "uppercase" }}>
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--faint)", marginBottom: 6 }}>
                 Extracted Cast
               </div>
               {castMembers.map((c, i) => (
                 <div key={i} style={{ marginBottom: 4, display: "flex", gap: 8 }}>
                   <span style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{c.actor}</span>
-                  <span style={{ fontFamily: mono, fontSize: 11, color: "var(--muted)" }}>as {c.role}</span>
+                  <span style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>as {c.role}</span>
                 </div>
               ))}
             </div>
@@ -1351,11 +1327,9 @@ export default function AddPage() {
             border: "none",
             cursor: "pointer",
             padding: "6px 0",
-            fontFamily: mono,
-            fontSize: 10.5,
+            fontFamily: sans,
+            fontSize: 11.5,
             color: "var(--muted)",
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
           }}
         >
           <span style={{
@@ -1366,7 +1340,7 @@ export default function AddPage() {
           }}>▶</span>
           More details
           {((seat && kind !== "festival") || pricePaid) && !showMoreDetails && (
-            <span style={{ color: "var(--faint)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+            <span style={{ color: "var(--faint)", fontWeight: 400 }}>
               · {[seat && kind !== "festival" && "seat", pricePaid && "price"].filter(Boolean).join(", ")}
             </span>
           )}
@@ -1396,7 +1370,7 @@ export default function AddPage() {
                       background: "transparent",
                       border: "none",
                       outline: "none",
-                      fontFamily: mono,
+                      fontFamily: sans,
                       fontSize: 13,
                       color: seat ? "var(--ink)" : "var(--faint)",
                       letterSpacing: -0.1,
@@ -1428,7 +1402,7 @@ export default function AddPage() {
                     background: "transparent",
                     border: "none",
                     outline: "none",
-                    fontFamily: mono,
+                    fontFamily: sans,
                     fontSize: 13,
                     color: ticketCount && ticketCount !== "1" ? "var(--ink)" : "var(--faint)",
                     letterSpacing: -0.1,
@@ -1461,14 +1435,14 @@ export default function AddPage() {
                     background: "transparent",
                     border: "none",
                     outline: "none",
-                    fontFamily: mono,
+                    fontFamily: sans,
                     fontSize: 13,
                     color: pricePaid ? "var(--ink)" : "var(--faint)",
                     letterSpacing: -0.1,
                     width: "100%",
                   }}
                 />
-                <span style={{ fontFamily: mono, fontSize: 10, color: "var(--faint)", letterSpacing: ".04em" }}>USD</span>
+                <span style={{ fontFamily: sans, fontSize: 11.5, color: "var(--faint)" }}>USD</span>
               </div>
             </div>
           </div>
@@ -1485,10 +1459,9 @@ export default function AddPage() {
         borderTop: `1px solid var(--rule)`,
       }}>
         <div style={{
-          fontFamily: mono,
-          fontSize: 10.5,
+          fontFamily: sans,
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".04em",
           flex: 1,
         }}>
           {isEditMode
@@ -1512,10 +1485,8 @@ export default function AddPage() {
             border: `1px solid var(--rule-strong)`,
             background: "transparent",
             color: "var(--muted)",
-            fontFamily: mono,
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: sans,
+            fontSize: 11.5,
             cursor: "pointer",
           }}
         >
@@ -1529,10 +1500,8 @@ export default function AddPage() {
             padding: "9px 16px",
             background: canSave ? "var(--ink)" : "var(--surface2)",
             color: canSave ? "var(--bg)" : "var(--faint)",
-            fontFamily: mono,
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: sans,
+            fontSize: 11.5,
             fontWeight: 500,
             display: "inline-flex",
             alignItems: "center",
@@ -1551,7 +1520,7 @@ export default function AddPage() {
       </div>
 
       {(createShow.isError || updateShow.isError) && (
-        <div style={{ color: "#E63946", fontSize: 12, fontFamily: mono, marginTop: 8 }}>
+        <div style={{ color: "#E63946", fontSize: 12.5, fontFamily: sans, marginTop: 8 }}>
           Failed to save show. Please try again.
         </div>
       )}
@@ -1569,9 +1538,8 @@ export default function AddPage() {
         minHeight: "100vh",
         background: "var(--bg)",
         color: "var(--muted)",
-        fontFamily: mono,
-        fontSize: 12,
-        letterSpacing: ".06em",
+        fontFamily: sans,
+        fontSize: 12.5,
       }}>
         Loading show...
       </div>
@@ -1603,10 +1571,9 @@ export default function AddPage() {
           display: "flex",
           alignItems: "center",
           gap: 10,
-          fontFamily: mono,
+          fontFamily: sans,
           fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".04em",
         }}>
           <span style={{ cursor: "pointer" }} onClick={() => router.push("/home")}>home</span>
           <span style={{ color: "var(--faint)" }}>&gt;</span>
@@ -1622,8 +1589,8 @@ export default function AddPage() {
           display: "flex",
           gap: 14,
           alignItems: "center",
-          fontFamily: mono,
-          fontSize: 11,
+          fontFamily: sans,
+          fontSize: 11.5,
           color: "var(--muted)",
         }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -1698,7 +1665,7 @@ function TicketStatusHint() {
         marginTop: 10,
         padding: "9px 12px",
         background: "var(--surface)",
-        borderLeft: "2px solid var(--accent)",
+        borderLeft: "2px solid var(--ink)",
         display: "flex",
         alignItems: "baseline",
         gap: 10,
@@ -1707,10 +1674,9 @@ function TicketStatusHint() {
       <div
         style={{
           flex: 1,
-          fontFamily: mono,
-          fontSize: 10.5,
+          fontFamily: sans,
+          fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".03em",
           lineHeight: 1.6,
         }}
       >
@@ -1725,11 +1691,9 @@ function TicketStatusHint() {
           background: "none",
           border: "none",
           padding: 0,
-          color: "var(--accent)",
-          fontFamily: mono,
-          fontSize: 10,
-          letterSpacing: ".08em",
-          textTransform: "uppercase",
+          color: "var(--accent-strong)",
+          fontFamily: sans,
+          fontSize: 11.5,
           cursor: "pointer",
           whiteSpace: "nowrap",
         }}
@@ -1757,11 +1721,9 @@ function FieldLabel({
       marginBottom: 8,
     }}>
       <div style={{
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 10.5,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 11.5,
         color: "var(--ink)",
-        letterSpacing: ".08em",
-        textTransform: "uppercase",
         fontWeight: 500,
         display: "flex",
         gap: 8,
@@ -1774,10 +1736,9 @@ function FieldLabel({
       </div>
       {hint && (
         <div style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".02em",
         }}>
           {hint}
         </div>
@@ -1789,11 +1750,9 @@ function FieldLabel({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontFamily: "var(--font-geist-mono), monospace",
-      fontSize: 9.5,
+      fontFamily: "var(--font-geist-sans), sans-serif",
+      fontSize: 11.5,
       color: "var(--faint)",
-      letterSpacing: ".14em",
-      textTransform: "uppercase",
       fontWeight: 600,
       marginBottom: 14,
       marginTop: 4,

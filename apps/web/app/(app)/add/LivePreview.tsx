@@ -20,7 +20,6 @@ import { KIND_GLYPHS, KIND_LABELS, setlistTotalSongs } from "@showbook/shared";
  * passed in as an already-resolved array.
  */
 
-const mono = "var(--font-geist-mono), monospace";
 const sans = "var(--font-geist-sans), sans-serif";
 
 const kindColor = (k: ShowKind) => `var(--kind-${k})`;
@@ -144,21 +143,18 @@ export function LivePreview({
       <div>
         <div
           style={{
-            fontFamily: mono,
-            fontSize: 10.5,
+            fontFamily: sans,
+            fontSize: 11.5,
             color: "var(--muted)",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
           }}
         >
           {isEditMode ? "Preview" : "Live preview"}
         </div>
         <div
           style={{
-            fontFamily: mono,
-            fontSize: 10,
+            fontFamily: sans,
+            fontSize: 11.5,
             color: "var(--faint)",
-            letterSpacing: ".02em",
             marginTop: 3,
           }}
         >
@@ -190,11 +186,9 @@ export function LivePreview({
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              fontFamily: mono,
-              fontSize: 10.5,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: kColor,
-              letterSpacing: ".08em",
-              textTransform: "uppercase",
               fontWeight: 500,
             }}
           >
@@ -204,10 +198,9 @@ export function LivePreview({
           {timeAgo && (
             <span
               style={{
-                fontFamily: mono,
-                fontSize: 10.5,
+                fontFamily: sans,
+                fontSize: 11.5,
                 color: "var(--muted)",
-                letterSpacing: ".04em",
               }}
             >
               {timeAgo}
@@ -286,10 +279,9 @@ export function LivePreview({
             <div>
               <div
                 style={{
-                  fontFamily: mono,
-                  fontSize: 11,
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   color: kColor,
-                  letterSpacing: ".1em",
                   fontWeight: 500,
                 }}
               >
@@ -297,10 +289,9 @@ export function LivePreview({
               </div>
               <div
                 style={{
-                  fontFamily: mono,
-                  fontSize: 10.5,
+                  fontFamily: sans,
+                  fontSize: 11.5,
                   color: "var(--muted)",
-                  letterSpacing: ".04em",
                   marginTop: 3,
                 }}
               >
@@ -315,8 +306,8 @@ export function LivePreview({
           <div
             style={{
               marginTop: 18,
-              fontFamily: mono,
-              fontSize: 11,
+              fontFamily: sans,
+              fontSize: 11.5,
               display: "grid",
               gridTemplateColumns: "1fr",
               rowGap: 0,
@@ -337,14 +328,12 @@ export function LivePreview({
                 <div
                   style={{
                     color: "var(--faint)",
-                    letterSpacing: ".08em",
-                    textTransform: "uppercase",
-                    fontSize: 10,
+                    fontSize: 11.5,
                   }}
                 >
                   {k}
                 </div>
-                <div style={{ color: "var(--ink)", letterSpacing: ".02em" }}>
+                <div style={{ color: "var(--ink)" }}>
                   {v}
                 </div>
               </div>
@@ -378,10 +367,9 @@ export function LivePreview({
                 >
                   <div
                     style={{
-                      fontFamily: mono,
-                      fontSize: 9,
+                      fontFamily: sans,
+                      fontSize: 11.5,
                       color: "var(--faint)",
-                      letterSpacing: ".06em",
                     }}
                   >
                     IMG_{String(i).padStart(2, "0")}
@@ -398,11 +386,9 @@ export function LivePreview({
         <div>
           <div
             style={{
-              fontFamily: mono,
-              fontSize: 10.5,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".08em",
-              textTransform: "uppercase",
               marginBottom: 10,
             }}
           >
@@ -426,11 +412,9 @@ export function LivePreview({
                 >
                   <div
                     style={{
-                      fontFamily: mono,
-                      fontSize: 10.5,
+                      fontFamily: sans,
+                      fontSize: 11.5,
                       color: "var(--ink)",
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
                       fontWeight: 500,
                     }}
                   >
@@ -448,14 +432,13 @@ export function LivePreview({
                   </div>
                   <div
                     style={{
-                      fontFamily: mono,
-                      fontSize: 10,
+                      fontFamily: sans,
+                      fontSize: 11.5,
                       color: isOk
                         ? "var(--kind-festival)"
                         : isSkipped
                           ? "var(--muted)"
                           : "var(--faint)",
-                      letterSpacing: ".04em",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 4,
@@ -470,10 +453,9 @@ export function LivePreview({
           <div
             style={{
               marginTop: 10,
-              fontFamily: mono,
-              fontSize: 10,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "var(--faint)",
-              letterSpacing: ".04em",
               lineHeight: 1.5,
             }}
           >

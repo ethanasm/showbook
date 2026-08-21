@@ -48,7 +48,7 @@ export default function SongDetailPage() {
             style={{
               background: "none",
               border: "none",
-              color: "var(--accent)",
+              color: "var(--accent-strong)",
               cursor: "pointer",
               fontFamily: "inherit",
               fontSize: "inherit",
@@ -72,17 +72,16 @@ export default function SongDetailPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".04em",
         }}
       >
         <Link
           href={`/artists/${song.performerId}`}
           style={{ color: "var(--muted)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}
         >
-          <ChevronLeft size={12} /> {song.performerName.toLowerCase()}
+          <ChevronLeft size={12} /> {song.performerName}
         </Link>
       </div>
 
@@ -95,7 +94,7 @@ export default function SongDetailPage() {
             margin: 0,
             marginTop: 6,
             fontSize: 38,
-            fontWeight: 700,
+            fontWeight: 600,
             letterSpacing: "-0.02em",
             lineHeight: 1.05,
             color: "var(--ink)",
@@ -127,10 +126,8 @@ export default function SongDetailPage() {
                 border: "1px solid var(--rule-strong)",
                 color: "var(--ink)",
                 textDecoration: "none",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                letterSpacing: ".06em",
-                textTransform: "uppercase",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
@@ -225,10 +222,9 @@ export default function SongDetailPage() {
               >
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--muted)",
-                    letterSpacing: ".04em",
                   }}
                 >
                   {formatDateMedium(row.date)}
@@ -248,11 +244,10 @@ export default function SongDetailPage() {
                   {row.venueCity && (
                     <span
                       style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 11,
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 11.5,
                         color: "var(--muted)",
                         marginLeft: 8,
-                        letterSpacing: ".02em",
                       }}
                     >
                       &middot; {row.venueCity}
@@ -262,11 +257,9 @@ export default function SongDetailPage() {
                 <div
                   style={{
                     textAlign: "right",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
-                    color: row.isEncore ? "var(--accent)" : "var(--faint)",
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
+                    color: row.isEncore ? "var(--accent-strong)" : "var(--faint)",
                   }}
                 >
                   {row.isEncore ? "Encore" : `Pos ${row.songIndex + 1}`}
@@ -298,11 +291,9 @@ function Stat({
     <>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 9.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
           marginBottom: 6,
         }}
       >
@@ -322,11 +313,10 @@ function Stat({
       {sub && (
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
             marginTop: 4,
-            letterSpacing: ".02em",
           }}
         >
           {sub}
@@ -351,11 +341,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 10.5,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 11.5,
         color: "var(--muted)",
-        letterSpacing: ".1em",
-        textTransform: "uppercase",
         marginBottom: 10,
       }}
     >
@@ -428,7 +416,7 @@ function Sparkline({
         role="img"
         aria-label="Position in setlist across plays"
       >
-        <path d={path} stroke="var(--accent)" strokeWidth={1.5} fill="none" />
+        <path d={path} stroke="var(--ink)" strokeWidth={1.5} fill="none" />
         {points.map((p, i) => {
           const x = PAD + p.x * (W - PAD * 2);
           const y = H - PAD - p.y * (H - PAD * 2);
@@ -438,7 +426,7 @@ function Sparkline({
               cx={x}
               cy={y}
               r={p.isEncore ? 3 : 2}
-              fill={p.isEncore ? "var(--accent)" : "var(--ink)"}
+              fill={p.isEncore ? "var(--accent-strong)" : "var(--ink)"}
             />
           );
         })}
@@ -448,11 +436,9 @@ function Sparkline({
           marginTop: 6,
           display: "flex",
           justifyContent: "space-between",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 9.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".06em",
-          textTransform: "uppercase",
         }}
       >
         <span>Earliest play</span>

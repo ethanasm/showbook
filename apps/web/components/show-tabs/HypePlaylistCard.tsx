@@ -227,10 +227,9 @@ export function HypePlaylistCard({
             <div
               data-testid={`hype-card-${kind}-status`}
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: scopeMissing.length > 0 ? "#E63946" : "var(--muted)",
-                letterSpacing: ".02em",
                 marginTop: 6,
               }}
             >

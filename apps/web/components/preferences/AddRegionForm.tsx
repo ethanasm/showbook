@@ -89,15 +89,14 @@ export function AddRegionForm({ onAdd }: AddRegionFormProps) {
           display: "flex",
           alignItems: "center",
           gap: 6,
-          fontFamily: "var(--font-geist-mono)",
-          fontSize: 10.5,
-          color: "var(--accent)",
-          letterSpacing: ".04em",
+          fontFamily: "var(--font-geist-sans)",
+          fontSize: 11.5,
+          color: "var(--accent-strong)",
           cursor: "pointer",
           marginTop: 12,
         }}
       >
-        <Plus size={11} color="var(--accent)" /> Add a region
+        <Plus size={11} color="var(--accent-strong)" /> Add a region
       </div>
     );
   }
@@ -125,15 +124,15 @@ export function AddRegionForm({ onAdd }: AddRegionFormProps) {
               maxHeight: 200, overflow: "auto",
             }}>
               {citySearch.isSearching && (
-                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--muted)" }}>Searching...</div>
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--muted)" }}>Searching...</div>
               )}
               {citySearch.isSearchError && (
-                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "#E63946" }}>
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "#E63946" }}>
                   Search unavailable. Use manual entry below.
                 </div>
               )}
               {citySearch.results.length === 0 && !citySearch.isSearching && (
-                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>No matches</div>
+                <div style={{ padding: "8px 12px", fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)" }}>No matches</div>
               )}
               {citySearch.results.map((p) => (
                 <button key={p.placeId} type="button" onClick={() => handleSelectCity(p.placeId)} style={{
@@ -141,7 +140,7 @@ export function AddRegionForm({ onAdd }: AddRegionFormProps) {
                   borderBottom: "1px solid var(--rule)", textAlign: "left", cursor: "pointer",
                 }}>
                   <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 13, color: "var(--ink)" }}>{p.displayName}</div>
-                  <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10, color: "var(--muted)" }}>{p.formattedAddress}</div>
+                  <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--muted)" }}>{p.formattedAddress}</div>
                 </button>
               ))}
             </div>
@@ -260,12 +259,10 @@ export function AddRegionForm({ onAdd }: AddRegionFormProps) {
 
 const formStyles: Record<string, React.CSSProperties> = {
   inputLabel: {
-    fontFamily: "var(--font-geist-mono)",
+    fontFamily: "var(--font-geist-sans)",
     fontSize: "0.7rem",
     fontWeight: 500,
     color: "var(--muted)",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
   },
   input: {
     fontFamily: "var(--font-geist-sans)",
@@ -279,20 +276,18 @@ const formStyles: Record<string, React.CSSProperties> = {
     width: "100%",
   },
   addButton: {
-    fontFamily: "var(--font-geist-mono)",
+    fontFamily: "var(--font-geist-sans)",
     fontSize: "0.75rem",
     fontWeight: 600,
-    color: "var(--accent-text)",
-    background: "var(--accent)",
+    color: "var(--bg)",
+    background: "var(--ink)",
     border: "none",
     borderRadius: 0,
     padding: "8px 16px",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
     transition: "opacity 0.15s ease",
   },
   cancelButton: {
-    fontFamily: "var(--font-geist-mono)",
+    fontFamily: "var(--font-geist-sans)",
     fontSize: "0.75rem",
     fontWeight: 500,
     color: "var(--muted)",
@@ -300,28 +295,23 @@ const formStyles: Record<string, React.CSSProperties> = {
     border: "1px solid var(--rule-strong)",
     borderRadius: 0,
     padding: "8px 16px",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
     cursor: "pointer",
     transition: "opacity 0.15s ease",
   },
   errorMessage: {
-    fontFamily: "var(--font-geist-mono)",
+    fontFamily: "var(--font-geist-sans)",
     fontSize: "0.7rem",
     color: "#E63946",
     marginTop: 8,
-    letterSpacing: "0.04em",
   },
   linkButton: {
-    fontFamily: "var(--font-geist-mono)",
+    fontFamily: "var(--font-geist-sans)",
     fontSize: "0.7rem",
     fontWeight: 500,
-    color: "var(--accent)",
+    color: "var(--accent-strong)",
     background: "transparent",
     border: "none",
     padding: "6px 0 0",
     cursor: "pointer",
-    letterSpacing: "0.04em",
-    textTransform: "uppercase",
   },
 };

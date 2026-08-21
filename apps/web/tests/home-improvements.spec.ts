@@ -126,7 +126,7 @@ test.describe('Home page — seeded shows', () => {
     await page.waitForURL(new RegExp(`/shows/${expectedId}`), { timeout: 8000 });
   });
 
-  test('wordmark header visible instead of greeting', async ({ page }) => {
+  test('page title visible instead of greeting', async ({ page }) => {
     await page.waitForSelector('[data-testid="home-wordmark"]', { timeout: 10000 });
     await expect(page.locator('[data-testid="home-wordmark"]')).toBeVisible();
     // Greeting text should not appear
@@ -138,11 +138,12 @@ test.describe('Home page — seeded shows', () => {
     // Stats labels are inside the home top bar (data-testid="home-stats")
     const stats = page.locator('[data-testid="home-stats"]');
     await expect(stats).toBeVisible({ timeout: 10000 });
-    // Labels appear as uppercase via CSS but DOM text is original case
-    await expect(stats.getByText('Shows', { exact: true })).toBeVisible();
-    await expect(stats.getByText('Venues', { exact: true })).toBeVisible();
-    await expect(stats.getByText('Artists', { exact: true })).toBeVisible();
+    // Sentence case in the DOM and on screen — the redesign drops the
+    // uppercase transform these labels used to carry.
+    await expect(stats.getByText('shows', { exact: true })).toBeVisible();
+    await expect(stats.getByText('venues', { exact: true })).toBeVisible();
+    await expect(stats.getByText('artists', { exact: true })).toBeVisible();
     // Spent column should not be present
-    await expect(stats.getByText('Spent', { exact: true })).toHaveCount(0);
+    await expect(stats.getByText('spent', { exact: true })).toHaveCount(0);
   });
 });

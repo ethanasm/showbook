@@ -9,7 +9,7 @@ import {
   uploadVideoForShow,
 } from "@/components/media";
 import type { CreateIntentFn, CompleteUploadFn } from "@/components/media/uploadHelpers";
-import { mono } from "@/app/(app)/add/constants";
+import { sans } from "@/app/(app)/add/constants";
 
 interface MediaStagingApi {
   stagedMedia: StagedMediaItem[];
@@ -135,7 +135,7 @@ export function MediaUploadSection({ media, lineupNames, disabled }: MediaUpload
       {mediaUploadStatus && (
         <div
           data-testid="add-show-media-status"
-          style={{ marginTop: 8, fontFamily: mono, fontSize: 12, color: "var(--muted)" }}
+          style={{ marginTop: 8, fontFamily: sans, fontSize: 12.5, color: "var(--muted)" }}
         >
           {mediaUploadStatus}…
         </div>
@@ -143,7 +143,7 @@ export function MediaUploadSection({ media, lineupNames, disabled }: MediaUpload
       {mediaUploadErrors.length > 0 && (
         <div
           data-testid="add-show-media-errors"
-          style={{ marginTop: 8, fontFamily: mono, fontSize: 12, color: "#E63946" }}
+          style={{ marginTop: 8, fontFamily: sans, fontSize: 12.5, color: "#E63946" }}
         >
           <div>Some uploads failed; the show was saved.</div>
           <ul style={{ margin: "4px 0 0 16px" }}>
@@ -159,8 +159,8 @@ export function MediaUploadSection({ media, lineupNames, disabled }: MediaUpload
               background: "transparent",
               border: "1px solid var(--rule-strong)",
               padding: "4px 8px",
-              fontFamily: mono,
-              fontSize: 11,
+              fontFamily: sans,
+              fontSize: 11.5,
               cursor: "pointer",
               color: "var(--ink)",
             }}

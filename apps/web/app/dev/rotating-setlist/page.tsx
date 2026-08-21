@@ -145,11 +145,9 @@ export default function RotatingPreviewPage() {
         style={{
           padding: "16px var(--page-pad-x, 24px)",
           borderBottom: "1px solid var(--rule)",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
-          letterSpacing: ".12em",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
-          textTransform: "uppercase",
         }}
       >
         Dev preview · Phase 5 rotating-style setlist (Phish · Sphere)

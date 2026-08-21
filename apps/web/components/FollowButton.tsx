@@ -2,16 +2,16 @@
 
 import { Plus, Check } from "lucide-react";
 
-type Variant = "sans" | "mono";
+type Variant = "default" | "compact";
 
 interface FollowButtonProps {
   isFollowed: boolean;
   isLoading: boolean;
   onToggle: () => void;
   /**
-   * Sans variant matches the larger detail-page hero typography
-   * (artist detail). Mono variant matches the venue detail page's
-   * monospace typography. The behaviour is identical either way.
+   * Default matches the larger detail-page hero typography (artist
+   * detail); compact is the smaller treatment the venue detail page
+   * uses. The behaviour is identical either way.
    */
   variant?: Variant;
 }
@@ -20,10 +20,10 @@ export function FollowButton({
   isFollowed,
   isLoading,
   onToggle,
-  variant = "sans",
+  variant = "default",
 }: FollowButtonProps) {
-  const isMono = variant === "mono";
-  const iconSize = isMono ? 12 : 13;
+  const isCompact = variant === "compact";
+  const iconSize = isCompact ? 12 : 13;
 
   return (
     <button
@@ -33,16 +33,13 @@ export function FollowButton({
       style={{
         padding: "8px 14px",
         border: `1px solid ${
-          isFollowed ? "var(--accent)" : "var(--rule-strong)"
+          isFollowed ? "var(--ink)" : "var(--rule-strong)"
         }`,
-        background: isFollowed ? "var(--accent)" : "transparent",
+        background: isFollowed ? "var(--ink)" : "transparent",
         color: isFollowed ? "var(--bg)" : "var(--ink)",
-        fontFamily: isMono
-          ? "var(--font-geist-mono), monospace"
-          : "var(--font-geist-sans), sans-serif",
-        fontSize: isMono ? 11 : 12.5,
-        fontWeight: isMono ? undefined : 500,
-        letterSpacing: isMono ? ".04em" : undefined,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: isCompact ? 12 : 13,
+        fontWeight: 500,
         cursor: isLoading ? "default" : "pointer",
         opacity: isLoading ? 0.6 : 1,
         display: "inline-flex",
