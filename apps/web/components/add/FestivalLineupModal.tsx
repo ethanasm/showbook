@@ -5,7 +5,7 @@ import { Star, X } from "lucide-react";
 import { FestivalLineupPicker } from "./FestivalLineupPicker";
 import type { FestivalLineupFlow } from "./useFestivalLineup";
 
-const mono = "var(--font-geist-mono)";
+const sans = "var(--font-geist-sans)";
 
 interface FestivalLineupModalProps {
   open: boolean;
@@ -138,7 +138,7 @@ function ExtractingState() {
   return (
     <div style={statePanelStyle}>
       <span style={spinnerStyle} aria-hidden />
-      <div style={{ fontFamily: mono, fontSize: 11, color: "var(--muted)" }}>
+      <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
         Reading the poster and pulling artist names…
       </div>
       <style>{spinnerKeyframes}</style>
@@ -157,10 +157,9 @@ function ErrorState({
     <div style={statePanelStyle}>
       <div
         style={{
-          fontFamily: mono,
-          fontSize: 12,
+          fontFamily: sans,
+          fontSize: 12.5,
           color: "#E63946",
-          letterSpacing: ".04em",
           textAlign: "center",
           maxWidth: 340,
         }}
@@ -190,7 +189,7 @@ const iconBadgeStyle: React.CSSProperties = {
   justifyContent: "center",
   background: "var(--surface2)",
   border: "1px solid var(--rule)",
-  color: "var(--accent)",
+  color: "var(--accent-strong)",
   flexShrink: 0,
   borderRadius: 6,
 };
@@ -202,10 +201,9 @@ const titleStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 const subtitleStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10.5,
+  fontFamily: sans,
+  fontSize: 11.5,
   color: "var(--muted)",
-  letterSpacing: ".04em",
   marginTop: 2,
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -235,21 +233,19 @@ const spinnerStyle: React.CSSProperties = {
   height: 14,
   borderRadius: "50%",
   border: "1.5px solid var(--rule-strong)",
-  borderTopColor: "var(--accent)",
+  borderTopColor: "var(--ink)",
   display: "inline-block",
   animation: "festival-lineup-spin .9s linear infinite",
 };
 const retryButtonStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 11,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 600,
-  color: "var(--accent-text)",
-  background: "var(--accent)",
+  color: "var(--bg)",
+  background: "var(--ink)",
   border: "none",
   borderRadius: 0,
   padding: "10px 18px",
   cursor: "pointer",
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
 };
 const spinnerKeyframes = `@keyframes festival-lineup-spin { to { transform: rotate(360deg); } }`;

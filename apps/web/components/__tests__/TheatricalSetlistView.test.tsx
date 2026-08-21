@@ -134,7 +134,7 @@ describe('TheatricalSetlistView — Beyoncé worked example', () => {
 });
 
 describe('ActDivider — primitive', () => {
-  it('emits the act label with the mono-caps treatment', () => {
+  it('emits the act label as a centered small label', () => {
     const { getByTestId } = render(<ActDivider label="Act V" />);
     const div = getByTestId('act-divider');
     assert.equal(div.getAttribute('data-act'), 'Act V');

@@ -90,10 +90,9 @@ function NoSongByPredictionCopy({ copy }: { copy: string }) {
       data-testid="improvised-copy"
       style={{
         padding: "16px var(--page-pad-x) 8px",
-        fontFamily: "var(--font-geist-mono), monospace",
+        fontFamily: "var(--font-geist-sans), sans-serif",
         fontSize: 11.5,
         color: "var(--muted)",
-        letterSpacing: ".02em",
         lineHeight: 1.6,
       }}
     >
@@ -130,11 +129,9 @@ export function VibeSketchCard({
     >
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--accent)",
-          letterSpacing: ".14em",
-          textTransform: "uppercase",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
+          color: "var(--accent-strong)",
         }}
       >
         Vibe sketch
@@ -169,12 +166,11 @@ export function VibeSketchCard({
                   key={d.axis}
                   data-axis={d.axis}
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
-                    color: "var(--accent)",
-                    border: "1px solid var(--accent)",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
+                    color: "var(--accent-strong)",
+                    border: "1px solid var(--ink)",
                     padding: "1px 6px",
-                    letterSpacing: ".04em",
                   }}
                 >
                   {d.description}
@@ -188,8 +184,8 @@ export function VibeSketchCard({
               style={{
                 margin: "6px 0 0",
                 paddingLeft: 18,
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
                 lineHeight: 1.55,
               }}
@@ -252,9 +248,9 @@ function VibeRadarPolygon({
       ))}
       <polygon
         points={points}
-        fill="var(--accent)"
+        fill="var(--ink)"
         fillOpacity={0.18}
-        stroke="var(--accent)"
+        stroke="var(--ink)"
         strokeWidth={1.5}
       />
     </svg>
@@ -287,11 +283,9 @@ export function ShowModeOddsCard({
     >
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--accent)",
-          letterSpacing: ".14em",
-          textTransform: "uppercase",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
+          color: "var(--accent-strong)",
         }}
       >
         Tonight&rsquo;s shape
@@ -326,7 +320,7 @@ export function ShowModeOddsCard({
               >
                 <div
                   style={{
-                    background: "var(--accent)",
+                    background: "var(--ink)",
                     height: 6,
                     width: `${pct}%`,
                   }}
@@ -334,8 +328,8 @@ export function ShowModeOddsCard({
               </div>
               <span
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--muted)",
                   fontFeatureSettings: '"tnum"',
                 }}
@@ -344,8 +338,8 @@ export function ShowModeOddsCard({
               </span>
               <span
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--faint)",
                   whiteSpace: "nowrap",
                 }}
@@ -376,11 +370,9 @@ function PopularPicksList({
     >
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--accent)",
-          letterSpacing: ".14em",
-          textTransform: "uppercase",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
+          color: "var(--accent-strong)",
           marginBottom: 8,
         }}
       >
@@ -409,8 +401,8 @@ function PopularPicksList({
             </span>
             <span
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
               }}
             >

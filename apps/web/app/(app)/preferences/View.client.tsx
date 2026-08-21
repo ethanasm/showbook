@@ -50,7 +50,7 @@ function ArtistFollowModal({ onClose, onFollowed }: { onClose: () => void; onFol
 
   const results = searchResults.data ?? [];
   const isPending = followMutation.isPending;
-  const mono = "var(--font-geist-mono)";
+  const sans = "var(--font-geist-sans)";
 
   return (
     <div onClick={onClose} style={{
@@ -62,7 +62,7 @@ function ArtistFollowModal({ onClose, onFollowed }: { onClose: () => void; onFol
         width: 420, maxHeight: "70vh", display: "flex", flexDirection: "column",
       }}>
         <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--rule)" }}>
-          <span style={{ fontFamily: mono, fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow an artist</span>
+          <span style={{ fontFamily: sans, fontSize: 12.5, color: "var(--ink)", fontWeight: 500 }}>Follow an artist</span>
           <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}><X size={14} /></button>
         </div>
         <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--rule)" }}>
@@ -71,10 +71,10 @@ function ArtistFollowModal({ onClose, onFollowed }: { onClose: () => void; onFol
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 14 }} />
         </div>
         <div style={{ overflow: "auto", maxHeight: 300 }}>
-          {trimmed.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
-          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {trimmed.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: sans, fontSize: 11.5, textAlign: "center" }}>Type at least 2 characters</div>}
+          {searchResults.isLoading && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: sans, fontSize: 11.5, textAlign: "center" }}>Searching...</div>}
           {followMutation.isError && (
-            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>Failed to follow artist</div>
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: sans, fontSize: 11.5 }}>Failed to follow artist</div>
           )}
           {results.map((a) => (
             <button key={a.id} type="button" disabled={isPending}
@@ -87,7 +87,7 @@ function ArtistFollowModal({ onClose, onFollowed }: { onClose: () => void; onFol
             </button>
           ))}
           {trimmed.length >= 2 && !searchResults.isLoading && results.length === 0 && (
-            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>No artists found</div>
+            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: sans, fontSize: 11.5, textAlign: "center" }}>No artists found</div>
           )}
         </div>
       </div>
@@ -321,14 +321,14 @@ export default function PreferencesView() {
           {/* ── Regions ──────────────────────────────── */}
           <div id="regions" style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 18 }}>
             <div>
-              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 11, color: "var(--ink)", letterSpacing: ".1em", textTransform: "uppercase", fontWeight: 500 }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--ink)", fontWeight: 500 }}>
                 Regions
               </div>
-              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", marginTop: 3, letterSpacing: ".04em" }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)", marginTop: 3 }}>
                 where to look for nearby shows · powers your daily digest
               </div>
             </div>
-            <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: !canAddEntity("regions", regions.length) ? "#E63946" : "var(--muted)", letterSpacing: ".04em", marginLeft: "auto" }}>
+            <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: !canAddEntity("regions", regions.length) ? "#E63946" : "var(--muted)", marginLeft: "auto" }}>
               {regions.length} / {entityLimit("regions")} regions
             </div>
           </div>
@@ -365,16 +365,15 @@ export default function PreferencesView() {
                   {canAddEntity("regions", regions.length) ? (
                     <AddRegionForm onAdd={() => prefsQuery.refetch()} />
                   ) : (
-                    <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em", marginTop: 12 }}>
+                    <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)", marginTop: 12 }}>
                       {entityLimitReachedHint("regions")}
                     </div>
                   )}
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono)",
-                      fontSize: 10.5,
+                      fontFamily: "var(--font-geist-sans)",
+                      fontSize: 11.5,
                       color: "var(--faint)",
-                      letterSpacing: ".04em",
                     }}
                   >
                     active regions appear in Discover
@@ -434,13 +433,13 @@ export default function PreferencesView() {
                           {venue.city && (
                             <div
                               style={{
-                                fontFamily: "var(--font-geist-mono)",
-                                fontSize: 10,
+                                fontFamily: "var(--font-geist-sans)",
+                                fontSize: 11.5,
                                 color: "var(--faint)",
                                 marginTop: 2,
                               }}
                             >
-                              {venue.city.toLowerCase()}
+                              {venue.city}
                             </div>
                           )}
                         </div>
@@ -467,7 +466,7 @@ export default function PreferencesView() {
                     >
                       &larr; Prev
                     </button>
-                    <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>
+                    <span style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)" }}>
                       {venuePage * VENUES_PER_PAGE + 1}–{Math.min((venuePage + 1) * VENUES_PER_PAGE, venues.length)} of {venues.length}
                     </span>
                     <button
@@ -495,21 +494,20 @@ export default function PreferencesView() {
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    fontFamily: "var(--font-geist-mono)",
-                    fontSize: 10.5,
-                    color: "var(--accent)",
-                    letterSpacing: ".04em",
+                    fontFamily: "var(--font-geist-sans)",
+                    fontSize: 11.5,
+                    color: "var(--accent-strong)",
                     cursor: "pointer",
                   }}
                 >
-                  <Plus size={11} color="var(--accent)" /> Follow a venue
+                  <Plus size={11} color="var(--accent-strong)" /> Follow a venue
                 </div>
               ) : (
-                <div style={{ padding: "12px 0", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
+                <div style={{ padding: "12px 0", fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)" }}>
                   {entityLimitReachedHint("venues")}
                 </div>
               )}
-              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: !canAddEntity("venues", venues.length) ? "#E63946" : "var(--faint)", letterSpacing: ".04em" }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: !canAddEntity("venues", venues.length) ? "#E63946" : "var(--faint)" }}>
                 {venues.length} / {entityLimit("venues")} venues
               </div>
             </div>
@@ -588,7 +586,7 @@ export default function PreferencesView() {
                     >
                       &larr; Prev
                     </button>
-                    <span style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)" }}>
+                    <span style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)" }}>
                       {artistPage * ARTISTS_PER_PAGE + 1}–{Math.min((artistPage + 1) * ARTISTS_PER_PAGE, followedArtists.length)} of {followedArtists.length}
                     </span>
                     <button
@@ -616,21 +614,20 @@ export default function PreferencesView() {
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    fontFamily: "var(--font-geist-mono)",
-                    fontSize: 10.5,
-                    color: "var(--accent)",
-                    letterSpacing: ".04em",
+                    fontFamily: "var(--font-geist-sans)",
+                    fontSize: 11.5,
+                    color: "var(--accent-strong)",
                     cursor: "pointer",
                   }}
                 >
-                  <Plus size={11} color="var(--accent)" /> Follow an artist
+                  <Plus size={11} color="var(--accent-strong)" /> Follow an artist
                 </div>
               ) : (
-                <div style={{ padding: "12px 0", fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: "var(--faint)", letterSpacing: ".04em" }}>
+                <div style={{ padding: "12px 0", fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: "var(--faint)" }}>
                   {entityLimitReachedHint("artists")}
                 </div>
               )}
-              <div style={{ fontFamily: "var(--font-geist-mono)", fontSize: 10.5, color: !canAddEntity("artists", followedArtists.length) ? "#E63946" : "var(--faint)", letterSpacing: ".04em" }}>
+              <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 11.5, color: !canAddEntity("artists", followedArtists.length) ? "#E63946" : "var(--faint)" }}>
                 {followedArtists.length} / {entityLimit("artists")} artists
               </div>
             </div>
@@ -669,12 +666,12 @@ export default function PreferencesView() {
                       gap: 6,
                     }}
                   >
-                    <Check size={12} color="var(--accent)" />
+                    <Check size={12} color="var(--accent-strong)" />
                     <span
                       style={{
-                        fontFamily: "var(--font-geist-mono)",
-                        fontSize: 10.5,
-                        color: "var(--accent)",
+                        fontFamily: "var(--font-geist-sans)",
+                        fontSize: 11.5,
+                        color: "var(--accent-strong)",
                         fontWeight: 500,
                       }}
                     >
@@ -684,8 +681,8 @@ export default function PreferencesView() {
                 ) : (
                   <span
                     style={{
-                      fontFamily: "var(--font-geist-mono)",
-                      fontSize: 10.5,
+                      fontFamily: "var(--font-geist-sans)",
+                      fontSize: 11.5,
                       color: "var(--faint)",
                     }}
                   >
@@ -825,7 +822,7 @@ function DeleteAccountModal({
               margin: 0,
               fontFamily: "var(--font-display)",
               fontSize: 20,
-              fontWeight: 700,
+              fontWeight: 600,
               color: "var(--ink)",
             }}
           >
@@ -847,10 +844,8 @@ function DeleteAccountModal({
           <label
             htmlFor="delete-account-confirm"
             style={{
-              fontFamily: "var(--font-geist-mono)",
-              fontSize: 11,
-              letterSpacing: 0.2,
-              textTransform: "uppercase",
+              fontFamily: "var(--font-geist-sans)",
+              fontSize: 11.5,
               color: "var(--faint)",
             }}
           >
@@ -872,9 +867,8 @@ function DeleteAccountModal({
               border: "1px solid var(--rule-strong)",
               background: "var(--bg)",
               color: "var(--ink)",
-              fontFamily: "var(--font-geist-mono)",
+              fontFamily: "var(--font-geist-sans)",
               fontSize: 14,
-              letterSpacing: 1,
             }}
           />
         </div>
@@ -927,15 +921,13 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid var(--rule)",
   },
   headerLabel: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".1em",
-    textTransform: "uppercase",
   },
   pageTitle: {
     fontFamily: "var(--font-display)",
-    fontWeight: 700,
+    fontWeight: 600,
     fontSize: 26,
     color: "var(--ink)",
     letterSpacing: "-0.01em",
@@ -968,8 +960,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 0",
   },
   emailDisplay: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 12,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 12.5,
     color: "var(--muted)",
   },
   regionGrid: {
@@ -978,8 +970,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   unfollowButton: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     fontWeight: 500,
     color: "var(--muted)",
     background: "transparent",
@@ -987,8 +979,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 0,
     padding: "5px 10px",
     cursor: "pointer",
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
     transition: "all 0.15s ease",
     flexShrink: 0,
   },
@@ -996,8 +986,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     fontWeight: 500,
     color: "var(--ink)",
     background: "transparent",
@@ -1005,8 +995,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 0,
     padding: "6px 12px",
     cursor: "pointer",
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
     flexShrink: 0,
   },
   // Destructive variant: red outline + ink-on-danger fill on the
@@ -1016,8 +1004,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     gap: 6,
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     fontWeight: 600,
     color: "var(--kind-theatre)",
     background: "transparent",
@@ -1025,8 +1013,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 0,
     padding: "6px 12px",
     cursor: "pointer",
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
     flexShrink: 0,
   },
 };

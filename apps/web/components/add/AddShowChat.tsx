@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc";
-import { mono, sans } from "@/app/(app)/add/constants";
+import { sans } from "@/app/(app)/add/constants";
 import type { ChatParsedResult, TMResult } from "@/app/(app)/add/types";
 import { isUpcomingDateHint, tmDateWindow } from "@/app/(app)/add/chat-tm-match";
 
@@ -252,8 +252,8 @@ export function AddShowChat({
               alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
               padding: "12px 16px",
               borderRadius: 12,
-              background: msg.role === "user" ? "var(--accent)" : "var(--surface)",
-              color: msg.role === "user" ? "var(--accent-text)" : "var(--ink)",
+              background: msg.role === "user" ? "var(--ink)" : "var(--surface)",
+              color: msg.role === "user" ? "var(--bg)" : "var(--ink)",
               fontFamily: sans,
               fontSize: 13,
               lineHeight: 1.5,
@@ -271,8 +271,8 @@ export function AddShowChat({
             borderRadius: 12,
             background: "var(--surface)",
             color: "var(--muted)",
-            fontFamily: mono,
-            fontSize: 12,
+            fontFamily: sans,
+            fontSize: 12.5,
           }}>
             {tmSearching ? "Checking Ticketmaster..." : "Thinking..."}
           </div>
@@ -336,7 +336,7 @@ export function AddShowChat({
               <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
                 {match.name}
               </div>
-              <div style={{ fontFamily: mono, fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>
                 {[match.venueName, match.venueCity, match.date]
                   .filter(Boolean)
                   .join(" · ")}
@@ -351,10 +351,8 @@ export function AddShowChat({
               border: `1px solid var(--rule-strong)`,
               background: "transparent",
               color: "var(--ink)",
-              fontFamily: mono,
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: sans,
+              fontSize: 11.5,
               cursor: "pointer",
               alignSelf: "flex-start",
             }}
@@ -372,10 +370,8 @@ export function AddShowChat({
               padding: "9px 16px",
               background: "var(--ink)",
               color: "var(--bg)",
-              fontFamily: mono,
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: sans,
+              fontSize: 11.5,
               fontWeight: 500,
               border: "none",
               cursor: "pointer",
@@ -395,10 +391,8 @@ export function AddShowChat({
               border: `1px solid var(--rule-strong)`,
               background: "transparent",
               color: "var(--ink)",
-              fontFamily: mono,
-              fontSize: 11,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
+              fontFamily: sans,
+              fontSize: 11.5,
               cursor: "pointer",
             }}
             onClick={() => {
@@ -436,7 +430,7 @@ export function AddShowChat({
             padding: "9px 12px",
             background: "transparent",
             color: "var(--muted)",
-            fontFamily: mono,
+            fontFamily: sans,
             fontSize: 15,
             border: `1px solid var(--rule-strong)`,
             cursor: festivalFlowPhase === "extracting" ? "wait" : "pointer",
@@ -476,10 +470,8 @@ export function AddShowChat({
             padding: "9px 16px",
             background: "var(--ink)",
             color: "var(--bg)",
-            fontFamily: mono,
-            fontSize: 11,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: sans,
+            fontSize: 11.5,
             fontWeight: 500,
             border: "none",
             cursor: "pointer",

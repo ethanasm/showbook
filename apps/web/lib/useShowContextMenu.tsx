@@ -196,7 +196,7 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
             <div
               style={{
                 fontFamily: "var(--font-geist-sans), sans-serif",
-                fontWeight: 700,
+                fontWeight: 600,
                 fontSize: "1.1rem",
                 color: "var(--ink)",
               }}
@@ -206,12 +206,10 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: "0.7rem",
                   fontWeight: 600,
                   color: "var(--muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
                 }}
               >
                 Seat
@@ -235,12 +233,10 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: "0.7rem",
                   fontWeight: 600,
                   color: "var(--muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
                 }}
               >
                 Total cost
@@ -266,12 +262,10 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: "0.7rem",
                   fontWeight: 600,
                   color: "var(--muted)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.04em",
                 }}
               >
                 Tickets
@@ -304,14 +298,13 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
                 style={{
                   padding: "8px 16px",
                   borderRadius: 6,
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: "0.75rem",
                   fontWeight: 600,
-                  letterSpacing: "0.02em",
                   cursor: "pointer",
                   border: "none",
-                  background: "var(--accent)",
-                  color: "var(--accent-text)",
+                  background: "var(--ink)",
+                  color: "var(--bg)",
                   opacity: updateState.isPending ? 0.5 : 1,
                 }}
               >
@@ -322,10 +315,9 @@ export function useShowContextMenu<T extends ShowForContextMenu>() {
                 style={{
                   padding: "8px 16px",
                   borderRadius: 6,
-                  fontFamily: "var(--font-geist-mono), monospace",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
                   fontSize: "0.75rem",
                   fontWeight: 600,
-                  letterSpacing: "0.02em",
                   cursor: "pointer",
                   border: "1px solid var(--rule)",
                   background: "transparent",

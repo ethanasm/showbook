@@ -24,20 +24,20 @@
 }
 
 .discover-header__subtitle {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
+/* Discover has no eyebrow above its title, so it sits a step below the
+   28px used on Upcoming / Logbook / Venues. */
 .discover-header__title {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-weight: 700;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 24px;
+  font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.01em;
-  line-height: 1.1;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
   margin-top: 4px;
 }
 
@@ -45,10 +45,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
 }
 
 .discover-header__location-sep {
@@ -81,7 +80,7 @@
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 13px;
   font-weight: 500;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.01em;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -99,9 +98,9 @@
 }
 
 .discover-tab__count {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 400;
+  color: var(--muted);
 }
 
 .discover-tab--active .discover-tab__count {
@@ -139,18 +138,16 @@
 
 .discover-rail__title {
   padding: 0 18px 10px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 /* Region section header in the venue rail (Near You tab). Sits between
  * "All nearby" and the venues belonging to that region. The header itself
  * is a button (clicking it collapses/expands the venues underneath) so we
- * reset button defaults. The label is uppercase mono with an accent tint
- * and a leading chevron — visually distinct from venue names below. */
+ * reset button defaults. The label is a small sentence-case label with a
+ * leading chevron — visually distinct from venue names below. */
 .discover-rail__region {
   margin-top: 6px;
 }
@@ -173,24 +170,22 @@
 }
 
 .discover-rail__section-header:hover .discover-rail__section-name {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .discover-rail__section-name {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent-strong);
   transition: color 0.12s;
 }
 
 .discover-rail__section-chevron {
-  font-size: 9px;
+  font-size: 11.5px;
   color: var(--muted);
   font-weight: 400;
   letter-spacing: 0;
@@ -199,10 +194,9 @@
 }
 
 .discover-rail__section-meta {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.04em;
 }
 
 .discover-rail__item {
@@ -225,7 +219,7 @@
 
 .discover-rail__item--active {
   background: var(--surface);
-  border-left-color: var(--accent);
+  border-left-color: var(--ink);
 }
 
 .discover-rail__item-body {
@@ -249,19 +243,17 @@
 }
 
 .discover-rail__item-nbhd {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
   margin-top: 2px;
-  letter-spacing: 0.04em;
 }
 
 .discover-rail__item-count {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   font-weight: 400;
-  font-feature-settings: "tnum";
 }
 
 .discover-rail__item--active .discover-rail__item-count {
@@ -285,10 +277,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
   cursor: pointer;
   background: none;
   border: none;
@@ -306,10 +297,9 @@
 
 .discover-rail__follow-hint {
   margin-top: 4px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.04em;
 }
 
 /* ── Feed Area ───────────────────────────────────────── */
@@ -348,15 +338,13 @@
      otherwise the "ON SALE" / "STATUS" headers drift right of their data.
      Original template (72/100/1fr/120/110/200) left only ~40 px for the
      headliner at a 1280 px viewport, truncating "Bon Iver" to "Bon…". */
-  grid-template-columns: 72px 84px minmax(0, 300px) 96px 88px 200px;
+  grid-template-columns: 88px 84px minmax(0, 320px) 104px 88px 190px;
   justify-content: space-between;
-  column-gap: 16px;
+  /* Keep in lock-step with `.discover-row`'s column-gap. */
+  column-gap: 12px;
   padding: 0 12px 10px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
-  color: var(--faint);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  color: var(--muted);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -366,7 +354,7 @@
    there's spare width; the headliner shares the same 300 px cap as the
    base template. */
 .discover-col-headers--region {
-  grid-template-columns: 72px 84px minmax(100px, 160px) minmax(0, 300px) 88px 80px 200px;
+  grid-template-columns: 88px 84px minmax(100px, 160px) minmax(0, 320px) 88px 80px 190px;
 }
 
 /* ── Venue Group ─────────────────────────────────────── */
@@ -402,14 +390,14 @@
 }
 
 .discover-venue-group__toggle:hover {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .discover-venue-group__chevron {
   display: inline-block;
   width: 12px;
   flex: 0 0 12px;
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 1;
   color: currentColor;
 }
@@ -421,14 +409,13 @@
 }
 
 .discover-venue-group__name--link:hover {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .discover-venue-group__meta {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.04em;
 }
 
 .discover-venue-group__rule {
@@ -439,17 +426,16 @@
 }
 
 .discover-venue-group__link {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
 }
 
 .discover-venue-group__link:hover {
-  color: var(--accent);
+  color: var(--accent-strong);
 }
 
 /* ── Announcement Row ────────────────────────────────── */
@@ -459,9 +445,16 @@
   /* Keep this in lock-step with `.discover-col-headers`. See that block for
      why the columns were re-sized and why spare width is distributed into
      the gaps rather than the headliner track. */
-  grid-template-columns: 72px 84px minmax(0, 300px) 96px 88px 200px;
+  grid-template-columns: 88px 84px minmax(0, 320px) 104px 88px 190px;
   justify-content: space-between;
-  column-gap: 16px;
+  /* 12px, not 16px. The redesign widened the date column (72 → 88, so
+     `Sep 5 sat` fits on one line) and the on-sale column (96 → 104), which
+     at a 1280px viewport starved the headliner track to 88px and tripped
+     `discover-kind-alignment.spec.ts`'s 100px floor. The minimum gap is the
+     right place to give that back: `justify-content: space-between` already
+     grows the gaps on wider viewports, so this only bites in the starved
+     case it exists to fix. */
+  column-gap: 12px;
   padding: 12px;
   align-items: center;
   border-bottom: 1px solid var(--rule);
@@ -470,7 +463,7 @@
 
 /* Near You row layout includes a Venue cell. */
 .discover-row.discover-row--region {
-  grid-template-columns: 72px 84px minmax(100px, 160px) minmax(0, 300px) 88px 80px 200px;
+  grid-template-columns: 88px 84px minmax(100px, 160px) minmax(0, 320px) 88px 80px 190px;
 }
 
 .discover-row__venue-cell {
@@ -490,17 +483,16 @@
 
 /* Region ingest pending indicator on the Near You feed header. */
 .discover-region-ingest-pending {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   font-style: italic;
   animation: discover-ingest-pulse 1.6s ease-in-out infinite;
 }
 
 .discover-region-explainer {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
   padding: 8px 20px 4px;
 }
@@ -516,7 +508,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--ink);
   animation: discover-ingest-pulse 1.2s ease-in-out infinite;
   flex-shrink: 0;
 }
@@ -551,41 +543,50 @@
 .discover-row--sports   { border-left: 2px solid var(--kind-sports); }
 
 /* Date column */
+/* Date reads on one line — `Sep 5 sat` — rather than stacking the weekday
+   under the date. The row is 88px wide now, which fits both. */
+.discover-row__date {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
 .discover-row__date-main {
   font-family: var(--font-geist-sans), sans-serif;
   font-size: 15px;
   color: var(--ink);
-  font-weight: 500;
-  letter-spacing: -0.3px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
   line-height: 1;
-  font-feature-settings: "tnum";
 }
 
 .discover-row__date-sub {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-size: 12px;
   color: var(--faint);
-  margin-top: 3px;
-  letter-spacing: 0.04em;
 }
 
 /* Kind column */
+/* Kind marker — 5px swatch + a `--muted` word. The kind colour still
+   identifies the row through its 2px left border; it no longer tints text. */
 .discover-row__kind {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--muted);
 }
 
-.discover-row__kind--concert  { color: var(--kind-concert); }
-.discover-row__kind--theatre  { color: var(--kind-theatre); }
-.discover-row__kind--comedy   { color: var(--kind-comedy); }
-.discover-row__kind--festival { color: var(--kind-festival); }
-.discover-row__kind--sports   { color: var(--kind-sports); }
+.discover-row__kind-swatch {
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+}
+
+.discover-row__kind--concert  .discover-row__kind-swatch { background: var(--kind-concert); }
+.discover-row__kind--theatre  .discover-row__kind-swatch { background: var(--kind-theatre); }
+.discover-row__kind--comedy   .discover-row__kind-swatch { background: var(--kind-comedy); }
+.discover-row__kind--festival .discover-row__kind-swatch { background: var(--kind-festival); }
+.discover-row__kind--sports   .discover-row__kind-swatch { background: var(--kind-sports); }
 
 /* Headliner column */
 .discover-row__headliner-cell {
@@ -594,10 +595,10 @@
 
 .discover-row__headliner {
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--ink);
-  letter-spacing: -0.25px;
+  letter-spacing: -0.025em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -614,7 +615,7 @@ a.discover-row__headliner-link:hover {
 
 .discover-row__support {
   font-family: var(--font-geist-sans), sans-serif;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 2px;
   white-space: nowrap;
@@ -623,22 +624,17 @@ a.discover-row__headliner-link:hover {
 }
 
 .discover-row__reason {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
   margin-top: 3px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 /* On Sale column */
 .discover-row__onsale {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--muted);
   font-weight: 400;
-  letter-spacing: 0.02em;
-  font-feature-settings: "tnum";
 }
 
 .discover-row__onsale--active {
@@ -651,61 +647,47 @@ a.discover-row__headliner-link:hover {
 .discover-row__onsale-soon {
   display: inline-block;
   margin-top: 3px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
+  font-size: 12px;
+  color: var(--accent-strong);
   font-weight: 500;
 }
 
-/* Status badge */
+/* Status — a word, not a badge. Every status used to be a filled or
+   bordered pill (on-sale filled with the kind colour, presale dashed, sold
+   out and announced outlined), which put a second coloured object in every
+   row after the kind chip. Weight and colour carry the distinction now; the
+   diagonal-stripe treatment on the row itself still marks cancelled and
+   sold-out rows at a glance. */
 .discover-row__status-badge {
   display: inline-block;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
-  padding: 3px 7px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
 }
 
 .discover-row__status-badge--announced {
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--rule-strong);
+  color: var(--muted);
 }
 
 .discover-row__status-badge--on_sale {
-  color: var(--bg);
-  border: none;
+  color: var(--ink);
+  font-weight: 600;
 }
-
-.discover-row__status-badge--on_sale.discover-row__status-badge--concert  { background: var(--kind-concert); }
-.discover-row__status-badge--on_sale.discover-row__status-badge--theatre  { background: var(--kind-theatre); }
-.discover-row__status-badge--on_sale.discover-row__status-badge--comedy   { background: var(--kind-comedy); }
-.discover-row__status-badge--on_sale.discover-row__status-badge--festival { background: var(--kind-festival); }
-.discover-row__status-badge--on_sale.discover-row__status-badge--sports   { background: var(--kind-sports); }
 
 .discover-row__status-badge--presale {
   color: var(--ink);
-  background: transparent;
-  border: 1px dashed var(--rule-strong);
+  font-weight: 500;
 }
 
 .discover-row__status-badge--sold_out {
   color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--rule-strong);
 }
 
 /* Cancelled is a distinct outcome from sold out — the show isn't happening
-   at all. Give it a red-tinted badge so it reads as "called off" rather than
-   "no tickets left". The colour matches the form-error red used elsewhere. */
+   at all. It keeps a colour of its own so it doesn't read as "no tickets
+   left". The value matches the form-error red used elsewhere. */
 .discover-row__status-badge--cancelled {
-  color: #e63946;
-  background: transparent;
-  border: 1px solid #e63946;
+  color: #c02734;
 }
 
 /* Sold-out and cancelled rows get diagonal stripes layered behind the cells
@@ -769,8 +751,8 @@ a.discover-row__headliner-link:hover {
 }
 
 .discover-watch-btn--watching {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--ink);
+  color: var(--bg);
   border: none;
 }
 
@@ -832,10 +814,9 @@ a.discover-row__headliner-link:hover {
   padding: 12px 14px;
   background: var(--surface);
   border: 1px solid var(--rule);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -870,7 +851,7 @@ a.discover-row__headliner-link:hover {
 }
 
 .discover-empty__text {
-  font-family: var(--font-geist-mono), monospace;
+  font-feature-settings: "tnum";
   font-size: 13px;
   color: var(--muted);
   text-align: center;
@@ -952,7 +933,7 @@ a.discover-row__headliner-link:hover {
 .discover-modal__title {
   font-family: var(--font-display);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.01em;
   line-height: 1.1;
@@ -1002,11 +983,10 @@ a.discover-row__headliner-link:hover {
 
 .discover-modal__hint {
   padding: 24px 20px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   text-align: center;
-  letter-spacing: 0.04em;
 }
 
 .discover-modal__result {
@@ -1046,21 +1026,19 @@ a.discover-row__headliner-link:hover {
 }
 
 .discover-modal__result-meta {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 2px;
-  letter-spacing: 0.04em;
 }
 
 .discover-modal__result-action {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
-  letter-spacing: 0.04em;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1090,12 +1068,10 @@ a.discover-row__headliner-link:hover {
 }
 
 .discover-region-form__label {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 .discover-region-form__search {
@@ -1124,10 +1100,9 @@ a.discover-row__headliner-link:hover {
 
 .discover-region-form__error {
   margin-top: 10px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: #e63946;
-  letter-spacing: 0.04em;
 }
 
 .discover-region-form__manual {
@@ -1135,13 +1110,11 @@ a.discover-row__headliner-link:hover {
   padding: 6px 0 0;
   border: none;
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-strong);
   cursor: pointer;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .discover-region-form__actions {
@@ -1155,16 +1128,14 @@ a.discover-row__headliner-link:hover {
   border: none;
   padding: 8px 14px;
   cursor: pointer;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .discover-region-form__add {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--ink);
+  color: var(--bg);
 }
 
 .discover-region-form__add:disabled {
@@ -1349,8 +1320,8 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-chip__count {
-    font-family: var(--font-geist-mono), monospace;
-    font-size: 9.5px;
+    font-feature-settings: "tnum";
+    font-size: 11.5px;
     font-weight: 400;
   }
 
@@ -1382,10 +1353,8 @@ a.discover-row__headliner-link:hover {
 
   .discover-chips__menu-title {
     font-family: var(--font-geist-sans), sans-serif;
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
     color: var(--muted);
     padding: 6px 8px 8px;
   }
@@ -1471,7 +1440,7 @@ a.discover-row__headliner-link:hover {
     display: inline-flex;
     width: 16px;
     flex-shrink: 0;
-    color: var(--accent);
+    color: var(--accent-strong);
   }
 
   .discover-chips__menu-label {
@@ -1482,8 +1451,8 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-chips__menu-count {
-    font-family: var(--font-geist-mono), monospace;
-    font-size: 11px;
+    font-feature-settings: "tnum";
+    font-size: 11.5px;
     color: var(--faint);
   }
 
@@ -1518,7 +1487,7 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-row__kind {
-    font-size: 9.5px;
+    font-size: 11.5px;
     justify-self: center;
   }
 
@@ -1528,7 +1497,7 @@ a.discover-row__headliner-link:hover {
   }
 
   .discover-row__date-sub {
-    font-size: 9px;
+    font-size: 11.5px;
   }
 
   /* Right-align the second line under the headliner (city for followed-
@@ -1600,7 +1569,7 @@ a.discover-row__headliner-link:hover {
     border-top: 1px solid var(--rule);
     padding: 14px 18px 18px;
     justify-content: center;
-    font-size: 9.5px;
+    font-size: 11.5px;
   }
 
   .discover-footer__right {

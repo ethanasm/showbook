@@ -135,7 +135,7 @@ export function Sidebar({
       <div className="sidebar__search-section">
         <button className="sidebar__search" type="button" onClick={onSearchClick}>
           <Search size={13} className="sidebar__search-icon" />
-          <span className="sidebar__search-text">search...</span>
+          <span className="sidebar__search-text">Search</span>
           <kbd className="sidebar__search-kbd">&thinsp;&#8984;K&thinsp;</kbd>
         </button>
       </div>

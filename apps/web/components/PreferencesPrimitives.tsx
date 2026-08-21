@@ -12,11 +12,9 @@ export function SectionHead({ label, sub }: SectionHeadProps) {
     <div style={{ marginBottom: 18 }}>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono)",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans)",
+          fontSize: 11.5,
           color: "var(--ink)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
           fontWeight: 500,
         }}
       >
@@ -25,11 +23,10 @@ export function SectionHead({ label, sub }: SectionHeadProps) {
       {sub && (
         <div
           style={{
-            fontFamily: "var(--font-geist-mono)",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans)",
+            fontSize: 11.5,
             color: "var(--faint)",
             marginTop: 3,
-            letterSpacing: ".04em",
           }}
         >
           {sub}
@@ -85,11 +82,10 @@ export function SettingRow({
         {description && (
           <div
             style={{
-              fontFamily: "var(--font-geist-mono)",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans)",
+              fontSize: 11.5,
               color: "var(--muted)",
               marginTop: 3,
-              letterSpacing: ".04em",
             }}
           >
             {description}

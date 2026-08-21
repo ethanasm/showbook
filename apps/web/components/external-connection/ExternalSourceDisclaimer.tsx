@@ -80,10 +80,8 @@ const containerStyle: React.CSSProperties = {
 };
 
 const eyebrowStyle: React.CSSProperties = {
-  fontFamily: "var(--font-geist-mono), monospace",
-  fontSize: 10.5,
-  letterSpacing: ".08em",
-  textTransform: "uppercase",
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 11.5,
   color: "var(--muted)",
   marginBottom: 2,
 };

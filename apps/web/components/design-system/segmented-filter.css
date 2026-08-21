@@ -4,12 +4,11 @@
      - apps/web/components/shows-list/FilterBar.tsx (year/state + kind
        filters on /logbook and /upcoming)
 
-   The container shell is identical for both filter strips. Buttons come
-   in two flavours:
-     - default (year / state): sans, Title-cased, larger padding.
-     - `--kind`: sans Title-cased too, smaller font + 12px icon, padding
-       tuned so the kind strip renders at the same 36 px height as the
-       year/state strip beside it. */
+   The container shell is identical for both filter strips, and so is the
+   type: 13px / 500, 600 and ink-filled when active. The kind strip used to
+   carry a 12px kind-coloured icon and fill with the kind colour when active,
+   which made a row of filters the most saturated object on the page; it now
+   reads as plain words in the same segmented control as everything else. */
 
 .segmented-filter {
   display: flex;
@@ -24,12 +23,11 @@
   border-right: 1px solid var(--rule-strong);
   background: transparent;
   color: var(--ink);
-  font-family: var(--font-geist-sans, "Geist Sans", sans-serif);
-  font-size: 13.5px;
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.01em;
   cursor: pointer;
-  font-feature-settings: "tnum";
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -39,13 +37,11 @@
 }
 
 .segmented-filter__btn--kind {
-  padding: 11px 11px;
-  font-size: 11px;
-  letter-spacing: -0.1px;
+  padding: 9px 14px;
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--muted);
+  color: var(--ink);
 }
 
 .segmented-filter__btn--active {
@@ -54,22 +50,13 @@
   font-weight: 600;
 }
 
-.segmented-filter__btn--active-concert {
-  background: var(--kind-concert);
-  color: var(--bg);
-}
-
-.segmented-filter__btn--active-theatre {
-  background: var(--kind-theatre);
-  color: var(--bg);
-}
-
-.segmented-filter__btn--active-comedy {
-  background: var(--kind-comedy);
-  color: var(--bg);
-}
-
+/* Kept as aliases so the per-kind class names in the call sites keep
+   resolving; every active state is now the same ink fill. */
+.segmented-filter__btn--active-concert,
+.segmented-filter__btn--active-theatre,
+.segmented-filter__btn--active-comedy,
 .segmented-filter__btn--active-festival {
-  background: var(--kind-festival);
+  background: var(--ink);
   color: var(--bg);
+  font-weight: 600;
 }

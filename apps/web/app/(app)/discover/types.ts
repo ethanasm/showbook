@@ -63,17 +63,17 @@ export type PendingIngestSnapshot = {
 // ---------------------------------------------------------------------------
 
 export const REASON_LABELS: Record<string, string> = {
-  "followed-venue": "followed venue",
-  nearby: "followed region",
-  "tracked-artist": "tracked artist",
+  "followed-venue": "Followed venue",
+  nearby: "Followed region",
+  "tracked-artist": "Tracked artist",
 };
 
 export const ON_SALE_STATUS_LABELS: Record<string, string> = {
-  announced: "announced",
-  presale: "presale",
-  on_sale: "on sale",
-  sold_out: "sold out",
-  cancelled: "cancelled",
+  announced: "Announced",
+  presale: "Presale",
+  on_sale: "On sale",
+  sold_out: "Sold out",
+  cancelled: "Cancelled",
 };
 
 export const DISCOVER_KIND_ORDER: Record<DiscoverKind, number> = {
@@ -125,9 +125,7 @@ export function formatShowDateShort(dateStr: string): {
   dow: string;
 } {
   const d = new Date(dateStr + "T00:00:00");
-  const month = d
-    .toLocaleDateString("en-US", { month: "short" })
-    .toUpperCase();
+  const month = d.toLocaleDateString("en-US", { month: "short" });
   const day = String(d.getDate());
   const year = String(d.getFullYear());
   const dow = d.toLocaleDateString("en-US", { weekday: "short" }).toLowerCase();

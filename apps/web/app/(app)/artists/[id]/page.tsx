@@ -24,10 +24,10 @@ import { MediaSection } from "@/components/media";
 import { SpotifyMark } from "@/components/BrandIcons";
 import {
   formatDateMedium as formatDateLong,
-  formatDateParts,
   formatOnSaleDate,
   InputMaxLength,
 } from "@showbook/shared";
+import { formatDateParts } from "@/lib/date-parts";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -236,7 +236,7 @@ export default function ArtistDetailPage() {
             style={{
               background: "none",
               border: "none",
-              color: "var(--accent)",
+              color: "var(--accent-strong)",
               cursor: "pointer",
               fontFamily: "inherit",
               fontSize: "inherit",
@@ -259,10 +259,9 @@ export default function ArtistDetailPage() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
-          letterSpacing: ".04em",
         }}
       >
         <Link
@@ -279,7 +278,7 @@ export default function ArtistDetailPage() {
         </Link>
         <span style={{ color: "var(--faint)" }}>/</span>
         <span style={{ color: "var(--ink)" }}>
-          {performer.name.toLowerCase()}
+          {performer.name}
         </span>
       </div>
 
@@ -380,7 +379,7 @@ export default function ArtistDetailPage() {
           value={
             <span
               style={{
-                color: upcoming.length > 0 ? "var(--accent)" : "var(--ink)",
+                color: upcoming.length > 0 ? "var(--accent-strong)" : "var(--ink)",
               }}
             >
               {upcoming.length}
@@ -458,12 +457,11 @@ export default function ArtistDetailPage() {
                         title="You heard this song live exactly once"
                         style={{
                           fontFamily:
-                            "var(--font-geist-mono), monospace",
-                          fontSize: 9.5,
-                          color: "var(--accent)",
-                          letterSpacing: ".04em",
+                            "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
+                          color: "var(--accent-strong)",
                           padding: "1px 6px",
-                          border: "1px solid var(--accent)",
+                          border: "1px solid var(--ink)",
                         }}
                       >
                         🆕 Once
@@ -473,8 +471,8 @@ export default function ArtistDetailPage() {
                   <div
                     style={{
                       textAlign: "right",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 12,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 12.5,
                       fontWeight: 500,
                       color:
                         row.timesHeard > 1
@@ -488,10 +486,9 @@ export default function ArtistDetailPage() {
                   <div
                     style={{
                       textAlign: "right",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--muted)",
-                      letterSpacing: ".02em",
                       whiteSpace: "nowrap",
                     }}
                   >
@@ -527,11 +524,9 @@ export default function ArtistDetailPage() {
                     columnGap: 16,
                     padding: "10px 20px 10px 10px",
                     borderBottom: "1px solid var(--rule)",
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 9.5,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--faint)",
-                    letterSpacing: ".12em",
-                    textTransform: "uppercase",
                   }}
                 >
                   <div />
@@ -632,11 +627,9 @@ function UpcomingShows({
               columnGap: 16,
               padding: "10px 16px",
               borderBottom: "1px solid var(--rule)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 9.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--faint)",
-              letterSpacing: ".12em",
-              textTransform: "uppercase",
             }}
           >
             <div>Date</div>
@@ -666,10 +659,9 @@ function UpcomingShows({
                 <div>
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 12,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 12.5,
                       color: "var(--ink)",
-                      letterSpacing: ".02em",
                       fontFeatureSettings: '"tnum"',
                     }}
                   >
@@ -677,8 +669,8 @@ function UpcomingShows({
                   </div>
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--muted)",
                       marginTop: 2,
                       textTransform: "lowercase",
@@ -693,11 +685,9 @@ function UpcomingShows({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 6,
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10.5,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: `var(--kind-${a.kind})`,
-                      letterSpacing: ".06em",
-                      textTransform: "uppercase",
                     }}
                   >
                     <KindIcon size={12} />
@@ -742,8 +732,8 @@ function UpcomingShows({
                   {a.support && a.support.length > 0 && (
                     <div
                       style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10.5,
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 11.5,
                         color: "var(--muted)",
                         marginTop: 2,
                         whiteSpace: "nowrap",
@@ -760,8 +750,8 @@ function UpcomingShows({
                   {isMobile && (
                     <div
                       style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10,
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 11.5,
                         color: "var(--faint)",
                         marginTop: 2,
                       }}
@@ -773,9 +763,9 @@ function UpcomingShows({
                 {!isMobile && (
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
-                      color: isOnSale ? "var(--accent)" : "var(--muted)",
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
+                      color: isOnSale ? "var(--accent-strong)" : "var(--muted)",
                       fontWeight: isOnSale ? 500 : 400,
                     }}
                   >
@@ -786,11 +776,9 @@ function UpcomingShows({
                   <div>
                     <span
                       style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10,
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 11.5,
                         color: "var(--ink)",
-                        letterSpacing: ".06em",
-                        textTransform: "uppercase",
                         padding: "3px 8px",
                         border: `1px solid var(--kind-${a.kind})`,
                       }}
@@ -836,8 +824,8 @@ function VenueCell({
       {location && (
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
             marginTop: 2,
             whiteSpace: "nowrap",
@@ -857,11 +845,9 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 9.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
           marginBottom: 6,
         }}
       >
@@ -922,11 +908,10 @@ function CardMessage({ children }: { children: React.ReactNode }) {
       style={{
         padding: "20px 16px",
         background: "var(--surface)",
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 11.5,
         color: "var(--muted)",
         textAlign: "center",
-        letterSpacing: ".04em",
       }}
     >
       {children}

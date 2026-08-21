@@ -17,11 +17,9 @@ export function SectionHeader({ label, note }: SectionHeaderProps) {
     >
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--ink)",
-          letterSpacing: ".1em",
-          textTransform: "uppercase",
           fontWeight: 500,
         }}
       >
@@ -30,10 +28,9 @@ export function SectionHeader({ label, note }: SectionHeaderProps) {
       {note && (
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
-            letterSpacing: ".04em",
           }}
         >
           {note}
