@@ -224,16 +224,14 @@ export function CalendarView({
             data-testid={`cal-view-${v}`}
             style={{
               padding: "7px 14px",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               border: "none",
               borderRight: i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
               background: active ? "var(--ink)" : "transparent",
               color: active ? "var(--bg)" : "var(--ink)",
               cursor: "pointer",
               fontWeight: active ? 500 : 400,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
             }}
           >
             {v}
@@ -353,10 +351,9 @@ export function CalendarView({
           </div>
           <div
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".06em",
             }}
           >
             {pastInMonth} past &middot; {upInMonth} upcoming &middot; {watchInMonth} watching
@@ -390,11 +387,9 @@ export function CalendarView({
                 key={i}
                 style={{
                   padding: "9px 10px",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--faint)",
-                  letterSpacing: ".12em",
-                  textTransform: "uppercase",
                 }}
               >
                 {d}
@@ -433,15 +428,14 @@ export function CalendarView({
                       >
                         <div
                           style={{
-                            fontFamily: "var(--font-geist-mono), monospace",
-                            fontSize: 11,
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 11.5,
                             color: todayCell
                               ? "var(--ink)"
                               : d
                                 ? "var(--muted)"
                                 : "var(--faint)",
                             fontWeight: todayCell ? 600 : 400,
-                            letterSpacing: ".02em",
                           }}
                         >
                           {d ?? ""}
@@ -453,8 +447,8 @@ export function CalendarView({
                           <div
                             key={s.id}
                             style={{
-                              fontFamily: "var(--font-geist-mono), monospace",
-                              fontSize: 10,
+                              fontFamily: "var(--font-geist-sans), sans-serif",
+                              fontSize: 11.5,
                               color: "var(--ink)",
                               padding: "3px 6px",
                               background:
@@ -465,7 +459,6 @@ export function CalendarView({
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
-                              letterSpacing: ".01em",
                             }}
                           >
                             {getHeadliner(s)}
@@ -503,13 +496,12 @@ export function CalendarView({
                           opacity: alpha,
                           display: "flex",
                           alignItems: "center",
-                          fontFamily: "var(--font-geist-mono), monospace",
-                          fontSize: 10,
+                          fontFamily: "var(--font-geist-sans), sans-serif",
+                          fontSize: 11.5,
                           color: "var(--ink)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
-                          letterSpacing: ".01em",
                           pointerEvents: "none",
                         }}
                       >
@@ -527,11 +519,9 @@ export function CalendarView({
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--ink)",
-              letterSpacing: ".1em",
-              textTransform: "uppercase",
               fontWeight: 500,
             }}
           >
@@ -574,8 +564,8 @@ export function CalendarView({
                   </div>
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 9.5,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--faint)",
                       marginTop: 3,
                     }}
@@ -599,8 +589,8 @@ export function CalendarView({
                   </div>
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--muted)",
                       marginTop: 2,
                       whiteSpace: "nowrap",
@@ -608,15 +598,13 @@ export function CalendarView({
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {show.venue.name.toLowerCase()}
+                    {show.venue.name}
                   </div>
                 </div>
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 9.5,
-                    letterSpacing: ".06em",
-                    textTransform: "uppercase",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color:
                       stateTag === "past"
                         ? "var(--faint)"
@@ -634,8 +622,8 @@ export function CalendarView({
           {railShows.length === 0 && (
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -755,7 +743,7 @@ function YearView({
         data-testid={`year-mini-grid-${month}`}
         style={{
           background: "var(--surface)",
-          border: isThisMonth ? "1px solid var(--accent)" : "1px solid var(--rule)",
+          border: isThisMonth ? "1px solid var(--ink)" : "1px solid var(--rule)",
           padding: "8px",
           cursor: "pointer",
         }}
@@ -767,11 +755,9 @@ function YearView({
       >
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--ink)",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
             fontWeight: 500,
             marginBottom: 4,
           }}
@@ -793,7 +779,7 @@ function YearView({
                 fontSize: 6,
                 color: "var(--faint)",
                 textAlign: "center",
-                fontFamily: "var(--font-geist-mono), monospace",
+                fontFamily: "var(--font-geist-sans), sans-serif",
               }}
             >
               {d}
@@ -843,7 +829,7 @@ function YearView({
                               style={{
                                 position: "absolute",
                                 inset: 0,
-                                background: "var(--accent)",
+                                background: "var(--ink)",
                                 opacity: 0.15,
                                 borderRadius: 1,
                               }}
@@ -855,7 +841,7 @@ function YearView({
                                 width: 4,
                                 height: 4,
                                 borderRadius: "50%",
-                                background: "var(--accent)",
+                                background: "var(--ink)",
                               }}
                             />
                           )}
@@ -876,7 +862,7 @@ function YearView({
                         width: `${widthPct}%`,
                         bottom: idx * 3,
                         height: 2,
-                        background: `var(--kind-${seg.kind}, var(--accent))`,
+                        background: `var(--kind-${seg.kind}, var(--ink))`,
                         opacity: seg.state === "watching" ? 0.5 : 1,
                         borderTopLeftRadius: seg.continuesLeft ? 0 : 1,
                         borderBottomLeftRadius: seg.continuesLeft ? 0 : 1,
@@ -938,8 +924,8 @@ function YearView({
                 background: "transparent",
                 color: atMinYear ? "var(--faint)" : "var(--ink)",
                 cursor: atMinYear ? "not-allowed" : "pointer",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 opacity: atMinYear ? 0.4 : 1,
               }}
             >
@@ -957,8 +943,8 @@ function YearView({
                 background: "transparent",
                 color: atMaxYear ? "var(--faint)" : "var(--ink)",
                 cursor: atMaxYear ? "not-allowed" : "pointer",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 opacity: atMaxYear ? 0.4 : 1,
               }}
             >

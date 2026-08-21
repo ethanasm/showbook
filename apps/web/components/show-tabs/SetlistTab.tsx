@@ -318,10 +318,9 @@ function SetlistTabUpcoming(props: SetlistTabProps) {
       <div
         style={{
           padding: "14px var(--page-pad-x) 24px",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--faint)",
-          letterSpacing: ".02em",
           lineHeight: 1.6,
         }}
       >
@@ -377,10 +376,9 @@ function ThinPredictionEmpty() {
   return (
     <div
       style={{
-        fontFamily: "var(--font-geist-mono), monospace",
-        fontSize: 11,
+        fontFamily: "var(--font-geist-sans), sans-serif",
+        fontSize: 11.5,
         color: "var(--muted)",
-        letterSpacing: ".02em",
         lineHeight: 1.6,
       }}
     >
@@ -424,11 +422,10 @@ function SetlistTabColdState({
       </div>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
           marginTop: 12,
-          letterSpacing: ".02em",
           maxWidth: 460,
           marginInline: "auto",
           lineHeight: 1.6,
@@ -550,11 +547,10 @@ function SetlistTabPast({
         </div>
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
             marginTop: 12,
-            letterSpacing: ".02em",
             maxWidth: 460,
             marginInline: "auto",
             lineHeight: 1.6,
@@ -644,7 +640,7 @@ function ActualBanner({ total }: { total: number }) {
           <div className="setlist-banner__small-label">Songs played</div>
           <div
             className="setlist-banner__small-value"
-            style={{ color: "var(--accent)" }}
+            style={{ color: "var(--accent-strong)" }}
           >
             CONFIRMED
           </div>
@@ -692,11 +688,10 @@ export function SetlistTabComingSoon({ style }: { style: string }) {
       </div>
       <div
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 11.5,
           color: "var(--muted)",
           marginTop: 12,
-          letterSpacing: ".02em",
           maxWidth: 460,
           marginInline: "auto",
           lineHeight: 1.6,

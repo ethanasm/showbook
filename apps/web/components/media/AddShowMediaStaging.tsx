@@ -25,10 +25,9 @@ const UPLOADER_TITLE_STYLE: CSSProperties = {
 };
 const UPLOADER_META_STYLE: CSSProperties = {
   marginTop: 4,
-  fontFamily: "var(--font-geist-mono), monospace",
-  fontSize: 10.5,
+  fontFamily: "var(--font-geist-sans), sans-serif",
+  fontSize: 11.5,
   color: "var(--muted)",
-  letterSpacing: "0.03em",
   lineHeight: 1.45,
 };
 const UPLOADER_ACTIONS_STYLE: CSSProperties = {
@@ -339,7 +338,7 @@ export function StagedMediaPreview({ staged }: { staged: StagedMediaItem[] }) {
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
-              <div style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 10, color: "var(--faint)" }}>
+              <div style={{ fontFamily: "var(--font-geist-sans), sans-serif", fontSize: 11.5, color: "var(--faint)" }}>
                 Decoding…
               </div>
             )

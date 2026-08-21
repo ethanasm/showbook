@@ -63,8 +63,8 @@ export function PaginationFooter({
           background: "transparent",
           color: atStart ? "var(--faint)" : "var(--ink)",
           padding: "5px 11px",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 12.5,
           cursor: atStart ? "not-allowed" : "pointer",
           opacity: atStart ? 0.4 : 1,
         }}
@@ -74,10 +74,9 @@ export function PaginationFooter({
       </button>
       <span
         style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--faint)",
-          letterSpacing: ".06em",
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 12.5,
+          color: "var(--muted)",
         }}
       >
         {totalItems === 0
@@ -95,8 +94,8 @@ export function PaginationFooter({
           background: "transparent",
           color: atEnd ? "var(--faint)" : "var(--ink)",
           padding: "5px 11px",
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 11,
+          fontFamily: "var(--font-geist-sans), sans-serif",
+          fontSize: 12.5,
           cursor: atEnd ? "not-allowed" : "pointer",
           opacity: atEnd ? 0.4 : 1,
         }}

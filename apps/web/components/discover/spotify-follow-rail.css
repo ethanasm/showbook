@@ -18,19 +18,16 @@
 }
 
 .spotify-follow-rail__kicker {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
 }
 
 .spotify-follow-rail__hint {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--muted);
   margin-top: 4px;
-  letter-spacing: 0.02em;
 }
 
 .spotify-follow-rail__follow-all {
@@ -38,9 +35,8 @@
   background: transparent;
   border: 1px solid var(--rule-strong);
   color: var(--ink);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   cursor: pointer;
 }
 
@@ -121,10 +117,9 @@
 }
 
 .spotify-follow-rail__genre {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9.5px;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   color: var(--faint);
-  letter-spacing: 0.04em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -136,9 +131,8 @@
   background: transparent;
   border: 1px solid var(--rule-strong);
   color: var(--ink);
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-feature-settings: "tnum";
+  font-size: 11.5px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -147,8 +141,8 @@
 }
 
 .spotify-follow-rail__follow:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--ink);
+  color: var(--accent-strong);
 }
 
 .spotify-follow-rail__follow:disabled {

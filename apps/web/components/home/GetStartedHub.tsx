@@ -10,7 +10,7 @@ import { SpotifyImportModal } from "@/components/preferences/SpotifyImportModal"
 import "@/components/design-system/design-system.css";
 
 const STORAGE_KEY = "showbook:get-started-dismissed";
-const MONO = "var(--font-geist-mono), monospace";
+const SANS = "var(--font-geist-sans), sans-serif";
 
 export function useGetStartedDismissed() {
   return useDismissableFlag(STORAGE_KEY);
@@ -69,7 +69,7 @@ export function GetStartedHub({
     },
     {
       id: "setlistfm",
-      icon: <Mail size={16} color="var(--accent)" />,
+      icon: <Mail size={16} color="var(--accent-strong)" />,
       title: "Import from setlist.fm",
       shortTitle: "setlist.fm",
       subtitle: "Pull every concert you've marked attended (with setlists).",
@@ -80,7 +80,7 @@ export function GetStartedHub({
       ? [
           {
             id: "eventbrite",
-            icon: <Ticket size={16} color="var(--accent)" />,
+            icon: <Ticket size={16} color="var(--accent-strong)" />,
             title: "Import from Eventbrite",
             shortTitle: "Eventbrite",
             subtitle: "Past orders for indie shows, comedy, theatre.",
@@ -91,7 +91,7 @@ export function GetStartedHub({
       : []),
     {
       id: "spotify",
-      icon: <Music size={16} color="var(--accent)" />,
+      icon: <Music size={16} color="var(--accent-strong)" />,
       title: "Follow your Spotify artists",
       shortTitle: "Spotify",
       subtitle: "Seeds Discover with their announcements — it won't add shows.",
@@ -100,7 +100,7 @@ export function GetStartedHub({
     },
     {
       id: "discover",
-      icon: <Eye size={16} color="var(--accent)" />,
+      icon: <Eye size={16} color="var(--accent-strong)" />,
       title: "Find shows in Discover",
       shortTitle: "Discover",
       subtitle: "See announcements from venues and artists you follow.",
@@ -140,10 +140,8 @@ export function GetStartedHub({
           >
             <div
               style={{
-                fontFamily: MONO,
-                fontSize: 10,
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
+                fontFamily: SANS,
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -153,10 +151,9 @@ export function GetStartedHub({
               <div
                 data-testid="get-started-progress"
                 style={{
-                  fontFamily: MONO,
-                  fontSize: 10,
-                  color: "var(--accent)",
-                  letterSpacing: ".06em",
+                  fontFamily: SANS,
+                  fontSize: 11.5,
+                  color: "var(--accent-strong)",
                   fontFeatureSettings: '"tnum"',
                 }}
               >
@@ -166,10 +163,9 @@ export function GetStartedHub({
           </div>
           <div
             style={{
-              fontFamily: MONO,
-              fontSize: 12,
+              fontFamily: SANS,
+              fontSize: 12.5,
               color: "var(--muted)",
-              letterSpacing: ".02em",
               lineHeight: 1.5,
             }}
           >
@@ -184,7 +180,7 @@ export function GetStartedHub({
                 data-testid={`get-started-step-${s.id}`}
                 className="get-started-card__step get-started-card__step--done"
               >
-                <Check size={13} color="var(--accent)" strokeWidth={2.4} />
+                <Check size={13} color="var(--accent-strong)" strokeWidth={2.4} />
                 <span className="get-started-card__step-label">{s.label}</span>
               </span>
             ) : (
@@ -196,7 +192,7 @@ export function GetStartedHub({
               >
                 <Circle size={11} color="var(--faint)" strokeWidth={2} />
                 <span className="get-started-card__step-label">{s.label}</span>
-                <ArrowRight size={11} color="var(--accent)" />
+                <ArrowRight size={11} color="var(--accent-strong)" />
               </Link>
             ),
           )}
@@ -214,10 +210,8 @@ export function GetStartedHub({
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 10 }}>
           <div
             style={{
-              fontFamily: MONO,
-              fontSize: 10,
-              letterSpacing: ".14em",
-              textTransform: "uppercase",
+              fontFamily: SANS,
+              fontSize: 11.5,
               color: "var(--faint)",
             }}
           >
@@ -237,10 +231,9 @@ export function GetStartedHub({
           </h1>
           <p
             style={{
-              fontFamily: MONO,
-              fontSize: 12,
+              fontFamily: SANS,
+              fontSize: 12.5,
               color: "var(--muted)",
-              letterSpacing: ".02em",
               margin: 0,
               lineHeight: 1.6,
             }}
@@ -257,7 +250,7 @@ export function GetStartedHub({
                   padding: "16px 16px",
                   background: d.primary ? "var(--surface)" : "transparent",
                   border: d.primary
-                    ? "1px solid var(--accent)"
+                    ? "1px solid var(--ink)"
                     : "1px solid var(--rule)",
                   borderRadius: 8,
                   cursor: "pointer",
@@ -281,11 +274,10 @@ export function GetStartedHub({
                   {d.icon}
                   <span
                     style={{
-                      fontFamily: MONO,
-                      fontSize: 12,
+                      fontFamily: SANS,
+                      fontSize: 12.5,
                       fontWeight: 600,
                       color: "var(--ink)",
-                      letterSpacing: ".04em",
                     }}
                   >
                     {d.title}
@@ -295,10 +287,9 @@ export function GetStartedHub({
                 </div>
                 <div
                   style={{
-                    fontFamily: MONO,
-                    fontSize: 11,
+                    fontFamily: SANS,
+                    fontSize: 11.5,
                     color: "var(--muted)",
-                    letterSpacing: ".02em",
                     lineHeight: 1.5,
                   }}
                 >

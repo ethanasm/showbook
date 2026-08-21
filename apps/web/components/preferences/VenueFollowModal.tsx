@@ -32,7 +32,7 @@ export function VenueFollowModal({ onClose, onFollowed }: VenueFollowModalProps)
   const localIds = new Set(localVenues.map((v) => v.googlePlaceId).filter(Boolean));
   const filteredPlaces = places.filter((p) => !localIds.has(p.placeId));
   const isPending = followMutation.isPending || createAndFollow.isPending;
-  const mono = "var(--font-geist-mono)";
+  const sans = "var(--font-geist-sans)";
 
   return (
     <div onClick={onClose} style={{
@@ -44,7 +44,7 @@ export function VenueFollowModal({ onClose, onFollowed }: VenueFollowModalProps)
         width: 420, maxHeight: "70vh", display: "flex", flexDirection: "column",
       }}>
         <div style={{ padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--rule)" }}>
-          <span style={{ fontFamily: mono, fontSize: 12, color: "var(--ink)", letterSpacing: ".08em", textTransform: "uppercase", fontWeight: 500 }}>Follow a venue</span>
+          <span style={{ fontFamily: sans, fontSize: 12.5, color: "var(--ink)", fontWeight: 500 }}>Follow a venue</span>
           <button type="button" onClick={onClose} style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer" }}><X size={14} /></button>
         </div>
         <div style={{ padding: "12px 20px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--rule)" }}>
@@ -53,15 +53,15 @@ export function VenueFollowModal({ onClose, onFollowed }: VenueFollowModalProps)
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 14 }} />
         </div>
         <div style={{ overflow: "auto", maxHeight: 300 }}>
-          {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Type at least 2 characters</div>}
-          {(searchResults.isLoading || placesResults.isLoading) && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>Searching...</div>}
+          {query.length < 2 && <div style={{ padding: "20px", color: "var(--faint)", fontFamily: sans, fontSize: 11.5, textAlign: "center" }}>Type at least 2 characters</div>}
+          {(searchResults.isLoading || placesResults.isLoading) && <div style={{ padding: "20px", color: "var(--muted)", fontFamily: sans, fontSize: 11.5, textAlign: "center" }}>Searching...</div>}
           {placesResults.isError && query.length >= 2 && (
-            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: sans, fontSize: 11.5 }}>
               Google Places search is unavailable. Showing local matches only.
             </div>
           )}
           {(followMutation.isError || createAndFollow.isError) && (
-            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: mono, fontSize: 11 }}>Failed to follow venue</div>
+            <div style={{ padding: "10px 20px", color: "#E63946", fontFamily: sans, fontSize: 11.5 }}>Failed to follow venue</div>
           )}
           {localVenues.map((v) => (
             <button key={v.id} type="button" disabled={isPending} onClick={() => followMutation.mutate({ venueId: v.id })} style={{
@@ -69,11 +69,11 @@ export function VenueFollowModal({ onClose, onFollowed }: VenueFollowModalProps)
               textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
             }}>
               <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{v.name}</div>
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{v.city}{v.stateRegion ? `, ${v.stateRegion}` : ""}</div>
             </button>
           ))}
           {filteredPlaces.length > 0 && localVenues.length > 0 && (
-            <div style={{ padding: "10px 20px", color: "var(--faint)", fontFamily: mono, fontSize: 10, letterSpacing: ".06em", textTransform: "uppercase", borderBottom: "1px solid var(--rule)" }}>Google Places</div>
+            <div style={{ padding: "10px 20px", color: "var(--faint)", fontFamily: sans, fontSize: 11.5, borderBottom: "1px solid var(--rule)" }}>Google Places</div>
           )}
           {filteredPlaces.map((p) => (
             <button key={p.placeId} type="button" disabled={isPending} onClick={() => createAndFollow.mutate({ placeId: p.placeId })} style={{
@@ -81,11 +81,11 @@ export function VenueFollowModal({ onClose, onFollowed }: VenueFollowModalProps)
               textAlign: "left", cursor: isPending ? "wait" : "pointer", opacity: isPending ? 0.5 : 1,
             }}>
               <div style={{ fontFamily: "var(--font-geist-sans)", fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>{p.displayName}</div>
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{p.formattedAddress}</div>
+              <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{p.formattedAddress}</div>
             </button>
           ))}
           {query.length >= 2 && !searchResults.isLoading && !placesResults.isLoading && localVenues.length === 0 && filteredPlaces.length === 0 && !placesResults.isError && (
-            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: mono, fontSize: 11, textAlign: "center" }}>No venues found</div>
+            <div style={{ padding: "20px", color: "var(--faint)", fontFamily: sans, fontSize: 11.5, textAlign: "center" }}>No venues found</div>
           )}
         </div>
       </div>

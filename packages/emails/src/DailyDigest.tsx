@@ -86,12 +86,15 @@ const C = {
   faint: 'rgba(245,245,243,0.40)',
   rule: 'rgba(245,245,243,0.10)',
   ruleStrong: 'rgba(245,245,243,0.22)',
-  accent: '#FFD166',
-  accentText: '#0C0C0C',
 } as const;
 
+// Archivo is the web app's one family (see apps/web/app/layout.tsx). Mail
+// clients won't fetch a web font, so it heads a stack of grotesques the
+// major clients do have -- the digest lands close to the app rather than on
+// Inter, and the ladder below matches the app's: no uppercase, no tracking
+// above 0, nothing heavier than 600.
 const FONT_STACK =
-  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+  "'Archivo', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 
 const styles = {
   body: {
@@ -115,16 +118,13 @@ const styles = {
   },
   wordmark: {
     fontSize: '12px',
-    fontWeight: 700,
-    color: C.accent,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase' as const,
+    fontWeight: 600,
+    color: C.ink,
     margin: 0,
   },
   dateLine: {
     fontSize: '12px',
     color: C.faint,
-    letterSpacing: '0.04em',
     margin: '4px 0 0',
   },
   headerRule: {
@@ -139,15 +139,13 @@ const styles = {
   },
   heroEyebrow: {
     fontSize: '11px',
-    fontWeight: 700,
-    color: C.accent,
-    letterSpacing: '0.16em',
-    textTransform: 'uppercase' as const,
+    fontWeight: 600,
+    color: C.ink,
     margin: '0 0 8px',
   },
   heroHeadline: {
     fontSize: '28px',
-    fontWeight: 700,
+    fontWeight: 600,
     color: C.ink,
     letterSpacing: '-0.02em',
     lineHeight: '32px',
@@ -176,11 +174,10 @@ const styles = {
   summaryStrip: {
     margin: '20px 0 0',
     padding: '10px 14px',
-    backgroundColor: 'rgba(255,209,102,0.06)',
-    borderLeft: `2px solid ${C.accent}`,
+    backgroundColor: C.surface,
+    borderLeft: `2px solid ${C.ink}`,
     fontSize: '12px',
     color: C.muted,
-    letterSpacing: '0.04em',
     lineHeight: '16px',
   },
   summaryDot: {
@@ -189,7 +186,7 @@ const styles = {
   },
   summaryCount: {
     color: C.ink,
-    fontWeight: 700,
+    fontWeight: 600,
   },
   section: {
     padding: '0 32px',
@@ -203,10 +200,8 @@ const styles = {
   },
   sectionTitle: {
     fontSize: '11px',
-    fontWeight: 700,
+    fontWeight: 600,
     color: C.muted,
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase' as const,
     margin: '0 0 14px',
   },
   rowWrap: {
@@ -228,20 +223,17 @@ const styles = {
   },
   rowAccent: {
     fontSize: '12px',
-    color: C.accent,
+    color: C.ink,
     fontWeight: 600,
-    letterSpacing: '0.02em',
     margin: '4px 0 0',
   },
   chip: {
     display: 'inline-block',
     padding: '2px 8px',
     fontSize: '10px',
-    fontWeight: 700,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase' as const,
-    color: C.accentText,
-    backgroundColor: C.accent,
+    fontWeight: 600,
+    color: C.bg,
+    backgroundColor: C.ink,
     borderRadius: '999px',
     marginLeft: '8px',
     verticalAlign: '2px',
@@ -254,11 +246,9 @@ const styles = {
     display: 'inline-block',
     padding: '12px 24px',
     fontSize: '13px',
-    fontWeight: 700,
-    letterSpacing: '0.04em',
-    textTransform: 'uppercase' as const,
-    color: C.accentText,
-    backgroundColor: C.accent,
+    fontWeight: 600,
+    color: C.bg,
+    backgroundColor: C.ink,
     borderRadius: '2px',
     textDecoration: 'none',
   },
@@ -640,8 +630,6 @@ export function DailyDigest({
                   margin: '14px 0 0',
                   color: C.faint,
                   fontSize: '10.5px',
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
                 }}
               >
                 {physicalAddress}

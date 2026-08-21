@@ -37,5 +37,4 @@ export const IMPORT_SOURCES = [
   { tag: "mail", label: "Gmail receipts", sub: "scan inbox" },
 ];
 
-export const mono = "var(--font-geist-mono), monospace";
 export const sans = "var(--font-geist-sans), sans-serif";

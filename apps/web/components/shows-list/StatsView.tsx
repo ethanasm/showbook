@@ -185,10 +185,9 @@ export function StatsView({
       >
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--muted)",
-            letterSpacing: ".06em",
           }}
         >
           {timeframeLabel} &middot; {total} show{total !== 1 ? "s" : ""}
@@ -221,11 +220,10 @@ export function StatsView({
                     i < arr.length - 1 ? "1px solid var(--rule-strong)" : "none",
                   background: active ? "var(--ink)" : "transparent",
                   color: active ? "var(--bg)" : "var(--ink)",
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   fontWeight: active ? 500 : 400,
                   cursor: "pointer",
-                  letterSpacing: ".04em",
                   flex: isMobile ? 1 : "0 0 auto",
                   whiteSpace: "nowrap",
                 }}
@@ -284,11 +282,9 @@ export function StatsView({
             </div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
+                fontFamily: "var(--font-geist-sans), sans-serif",
                 fontSize: isMobile ? 10 : 11,
                 color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
                 marginTop: isMobile ? 6 : 10,
                 fontWeight: 500,
               }}
@@ -298,8 +294,8 @@ export function StatsView({
             {sub && (
               <div
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--faint)",
                   marginTop: 3,
                   whiteSpace: "nowrap",
@@ -335,11 +331,9 @@ export function StatsView({
           <div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
                 fontWeight: 500,
               }}
             >
@@ -347,8 +341,8 @@ export function StatsView({
             </div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
                 marginTop: 4,
               }}
@@ -360,8 +354,8 @@ export function StatsView({
             style={{
               display: "flex",
               gap: 16,
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
             }}
           >
@@ -427,10 +421,9 @@ export function StatsView({
                       top: -16,
                       left: "50%",
                       transform: "translateX(-50%)",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 9,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--kind-concert)",
-                      letterSpacing: ".1em",
                       whiteSpace: "nowrap",
                       fontWeight: 500,
                     }}
@@ -455,10 +448,9 @@ export function StatsView({
               key={i}
               style={{
                 textAlign: "center",
-                fontFamily: "var(--font-geist-mono), monospace",
+                fontFamily: "var(--font-geist-sans), sans-serif",
                 fontSize: isMobile ? 8.5 : 10,
                 color: i === currentMonth ? "var(--ink)" : "var(--faint)",
-                letterSpacing: isMobile ? ".02em" : ".06em",
                 fontWeight: i === currentMonth ? 500 : 400,
               }}
             >
@@ -493,11 +485,9 @@ export function StatsView({
           >
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
                 fontWeight: 500,
               }}
             >
@@ -505,8 +495,8 @@ export function StatsView({
             </div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -551,7 +541,7 @@ export function StatsView({
                     </div>
                     <div
                       style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontFamily: "var(--font-geist-sans), sans-serif",
                         fontSize: 11.5,
                         color: "var(--ink)",
                         fontWeight: 500,
@@ -615,7 +605,7 @@ export function StatsView({
                 </div>
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
                     fontSize: 11.5,
                     color: "var(--ink)",
                     textAlign: "right",
@@ -630,8 +620,8 @@ export function StatsView({
           {topArtists.length === 0 && (
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -657,11 +647,9 @@ export function StatsView({
           >
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
                 fontWeight: 500,
               }}
             >
@@ -669,8 +657,8 @@ export function StatsView({
             </div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -715,8 +703,8 @@ export function StatsView({
                       {neighborhood && (
                         <div
                           style={{
-                            fontFamily: "var(--font-geist-mono), monospace",
-                            fontSize: 10,
+                            fontFamily: "var(--font-geist-sans), sans-serif",
+                            fontSize: 11.5,
                             color: "var(--muted)",
                             marginTop: 1,
                             whiteSpace: "nowrap",
@@ -724,13 +712,13 @@ export function StatsView({
                             textOverflow: "ellipsis",
                           }}
                         >
-                          {neighborhood.toLowerCase()}
+                          {neighborhood}
                         </div>
                       )}
                     </div>
                     <div
                       style={{
-                        fontFamily: "var(--font-geist-mono), monospace",
+                        fontFamily: "var(--font-geist-sans), sans-serif",
                         fontSize: 11.5,
                         color: "var(--ink)",
                         fontWeight: 500,
@@ -780,13 +768,13 @@ export function StatsView({
                   </div>
                   <div
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 10,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--muted)",
                       marginTop: 2,
                     }}
                   >
-                    {neighborhood.toLowerCase()}
+                    {neighborhood}
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 2 }}>
@@ -805,7 +793,7 @@ export function StatsView({
                 </div>
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
+                    fontFamily: "var(--font-geist-sans), sans-serif",
                     fontSize: 11.5,
                     color: "var(--ink)",
                     textAlign: "right",
@@ -820,8 +808,8 @@ export function StatsView({
           {topVenues.length === 0 && (
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -847,11 +835,9 @@ export function StatsView({
           >
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--ink)",
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
                 fontWeight: 500,
               }}
             >
@@ -859,8 +845,8 @@ export function StatsView({
             </div>
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -891,11 +877,9 @@ export function StatsView({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 7,
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: `var(--kind-${kind})`,
-                      letterSpacing: ".08em",
-                      textTransform: "uppercase",
                       fontWeight: 500,
                     }}
                   >
@@ -904,8 +888,8 @@ export function StatsView({
                   </span>
                   <span
                     style={{
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 11,
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       color: "var(--ink)",
                       fontWeight: 500,
                     }}
@@ -928,8 +912,8 @@ export function StatsView({
           {kindMix.length === 0 && (
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--faint)",
               }}
             >
@@ -949,11 +933,9 @@ export function StatsView({
       >
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 11,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--ink)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
             fontWeight: 500,
             marginBottom: 14,
           }}
@@ -1027,11 +1009,9 @@ export function StatsView({
             <div key={l} style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--faint)",
-                  letterSpacing: ".1em",
-                  textTransform: "uppercase",
                 }}
               >
                 {l}
@@ -1054,8 +1034,8 @@ export function StatsView({
               </div>
               <div
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   color: "var(--muted)",
                   marginTop: 4,
                   whiteSpace: "nowrap",

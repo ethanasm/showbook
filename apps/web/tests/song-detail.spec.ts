@@ -60,7 +60,10 @@ test.describe('Song detail page', () => {
     await songsSection.getByTestId('artist-songs-row').first().click();
     await page.waitForURL(/\/songs\/[0-9a-f-]+/);
 
-    await main(page).getByRole('link', { name: /radiohead/ }).first().click();
+    // Case-insensitive: the breadcrumb used to lower-case the performer
+    // name to suit the monospace type system, and now renders it as-is
+    // ("Radiohead"). The assertion is about the link's target, not its case.
+    await main(page).getByRole('link', { name: /radiohead/i }).first().click();
     await page.waitForURL(artistUrl);
   });
 });

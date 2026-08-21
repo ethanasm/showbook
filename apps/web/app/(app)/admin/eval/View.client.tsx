@@ -113,7 +113,7 @@ function MiniChart({ points }: { points: ChartPoint[] }) {
       />
       <path
         d={brierPath}
-        stroke="var(--accent)"
+        stroke="var(--ink)"
         strokeWidth={1.5}
         fill="none"
       />
@@ -131,7 +131,7 @@ function MiniChart({ points }: { points: ChartPoint[] }) {
         const yP10 = pad + (1 - Math.min(1, Math.max(0, p.p10))) * (height - 2 * pad);
         return (
           <g key={i}>
-            <circle cx={x} cy={yBrier} r={2} fill="var(--accent)" />
+            <circle cx={x} cy={yBrier} r={2} fill="var(--ink)" />
             <circle cx={x} cy={yP10} r={2} fill="var(--ink)" />
           </g>
         );
@@ -174,13 +174,13 @@ function CalibrationCurve({ bins }: { bins: CalibrationBin[] }) {
       />
       <path d={diag} stroke="var(--faint)" strokeDasharray="3 3" />
       {points.length >= 2 && (
-        <path d={linePath} stroke="var(--accent)" strokeWidth={1.5} fill="none" />
+        <path d={linePath} stroke="var(--ink)" strokeWidth={1.5} fill="none" />
       )}
       {points.map((b, i) => {
         const x = pad + b.meanProbability * (width - 2 * pad);
         const y = pad + (1 - b.empiricalRate) * (height - 2 * pad);
         const r = Math.max(2, Math.min(8, Math.sqrt(b.predictions) * 1.2));
-        return <circle key={i} cx={x} cy={y} r={r} fill="var(--accent)" opacity={0.7} />;
+        return <circle key={i} cx={x} cy={y} r={r} fill="var(--ink)" opacity={0.7} />;
       })}
       <text x={pad} y={height - 6} fontSize={9} fill="var(--muted)">
         predicted →
@@ -278,7 +278,7 @@ export default function EvalView() {
             <MiniChart points={chartPoints} />
             <div style={styles.legendRow}>
               <span style={styles.legendItem}>
-                <span style={{ ...styles.swatch, background: "var(--accent)" }} />
+                <span style={{ ...styles.swatch, background: "var(--ink)" }} />
                 Brier (0–0.5)
               </span>
               <span style={styles.legendItem}>
@@ -455,15 +455,13 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: "1px solid var(--rule)",
   },
   headerLabel: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".1em",
-    textTransform: "uppercase",
   },
   pageTitle: {
     fontFamily: "var(--font-display)",
-    fontWeight: 700,
+    fontWeight: 600,
     fontSize: 26,
     color: "var(--ink)",
     letterSpacing: "-0.01em",
@@ -474,11 +472,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   titleIcon: {
-    color: "var(--accent)",
+    color: "var(--accent-strong)",
   },
   headerSub: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
     marginTop: 8,
     maxWidth: 640,
@@ -504,11 +502,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "14px 16px",
   },
   metricLabel: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".08em",
-    textTransform: "uppercase",
   },
   metricValue: {
     fontFamily: "var(--font-display)",
@@ -518,8 +514,8 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "-0.02em",
   },
   metricHint: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--faint)",
     marginTop: 2,
   },
@@ -530,8 +526,8 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 28,
   },
   chartEmpty: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--faint)",
     padding: "40px 0",
     textAlign: "center",
@@ -540,8 +536,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     gap: 20,
     marginTop: 12,
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
   },
   legendItem: {
@@ -565,11 +561,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 14px",
     background: "var(--surface)",
     borderBottom: "1px solid var(--rule)",
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".08em",
-    textTransform: "uppercase",
   },
   styleRow: {
     display: "grid",
@@ -577,8 +571,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     padding: "10px 14px",
     borderBottom: "1px solid var(--rule)",
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 12,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 12.5,
     color: "var(--ink)",
   },
   styleName: {
@@ -594,11 +588,9 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 14px",
     background: "var(--surface)",
     borderBottom: "1px solid var(--rule)",
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".08em",
-    textTransform: "uppercase",
   },
   recentRowOuter: {
     borderBottom: "1px solid var(--rule)",
@@ -613,14 +605,14 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     textAlign: "left",
     cursor: "pointer",
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 12,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 12.5,
     color: "var(--ink)",
   },
   recentEmpty: {
     padding: "24px",
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--faint)",
     textAlign: "center",
   },
@@ -644,19 +636,17 @@ const styles: Record<string, React.CSSProperties> = {
     minWidth: 0,
   },
   expandColTitle: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 10.5,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "var(--muted)",
-    letterSpacing: ".08em",
-    textTransform: "uppercase",
     marginBottom: 6,
   },
   songList: {
     listStyle: "decimal",
     paddingLeft: 20,
     margin: 0,
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     lineHeight: 1.55,
   },
   songHit: {
@@ -679,23 +669,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: "var(--muted)",
   },
   rerunButton: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     fontWeight: 600,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
-    color: "var(--accent)",
+    color: "var(--accent-strong)",
     background: "transparent",
-    border: "1px solid var(--accent)",
+    border: "1px solid var(--ink)",
     padding: "6px 12px",
     cursor: "pointer",
   },
   rerunButtonDisabled: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     fontWeight: 600,
-    letterSpacing: ".06em",
-    textTransform: "uppercase",
     color: "var(--faint)",
     background: "transparent",
     border: "1px solid var(--rule-strong)",
@@ -703,8 +689,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "not-allowed",
   },
   errorLine: {
-    fontFamily: "var(--font-geist-mono)",
-    fontSize: 11,
+    fontFamily: "var(--font-geist-sans)",
+    fontSize: 11.5,
     color: "#E63946",
   },
   muted: {

@@ -74,7 +74,7 @@ export function FanLoyaltyRing({ showId, compact = false }: FanLoyaltyRingProps)
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--rule-strong)"
+          stroke="var(--rule)"
           strokeWidth={stroke}
         />
         <circle
@@ -82,7 +82,7 @@ export function FanLoyaltyRing({ showId, compact = false }: FanLoyaltyRingProps)
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--accent)"
+          stroke="var(--ink)"
           strokeWidth={stroke}
           strokeDasharray={`${dashFilled} ${circumference - dashFilled}`}
           strokeDashoffset={circumference / 4}
@@ -95,7 +95,7 @@ export function FanLoyaltyRing({ showId, compact = false }: FanLoyaltyRingProps)
           fill="var(--ink)"
           fontFamily="var(--font-geist-sans), sans-serif"
           fontSize={size * 0.3}
-          fontWeight={500}
+          fontWeight={600}
           textAnchor="middle"
           dominantBaseline="middle"
           letterSpacing="-1"

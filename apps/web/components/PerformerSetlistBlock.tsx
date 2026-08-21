@@ -74,10 +74,8 @@ export function PerformerSetlistBlock({
             background: "transparent",
             border: "1px solid var(--rule-strong)",
             color: isFetching ? "var(--faint)" : "var(--muted)",
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 10,
-            letterSpacing: ".06em",
-            textTransform: "uppercase",
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             cursor: isFetching ? "default" : "pointer",
           }}
         >
@@ -106,15 +104,13 @@ export function PerformerSetlistBlock({
                     style={{
                       alignSelf: "flex-start",
                       background: "var(--surface2)",
-                      color: "var(--accent)",
+                      color: "var(--accent-strong)",
                       padding: "2px 8px",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      fontSize: 9,
-                      letterSpacing: ".1em",
+                      fontFamily: "var(--font-geist-sans), sans-serif",
+                      fontSize: 11.5,
                       fontWeight: 600,
-                      textTransform: "uppercase",
                       borderRadius: 999,
-                      border: "1px solid var(--accent)",
+                      border: "1px solid var(--ink)",
                     }}
                   >
                     Encore
@@ -130,11 +126,10 @@ export function PerformerSetlistBlock({
                         padding: "3px 8px",
                         background: isEncore ? "var(--surface2)" : "var(--surface2)",
                         color: "var(--ink)",
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        fontSize: 10.5,
-                        letterSpacing: ".02em",
+                        fontFamily: "var(--font-geist-sans), sans-serif",
+                        fontSize: 11.5,
                         borderLeft: isEncore
-                          ? "2px solid var(--accent)"
+                          ? "2px solid var(--ink)"
                           : undefined,
                       }}
                     >
@@ -170,8 +165,8 @@ export function PerformerSetlistBlock({
               background: "transparent",
               border: "none",
               outline: "none",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--ink)",
               resize: "vertical",
               boxSizing: "border-box",

@@ -4,8 +4,8 @@ import Link from "next/link";
 import { Ticket, MoreHorizontal, Trash2 } from "lucide-react";
 import {
   daysUntil,
-  formatDateParts,
 } from "@showbook/shared";
+import { formatDateParts } from "@/lib/date-parts";
 import {
   getHeadliner,
   getHeadlinerId,
@@ -72,11 +72,9 @@ export function ShowDetailPanel({
       <div>
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
             marginBottom: 6,
           }}
         >
@@ -159,11 +157,10 @@ export function ShowDetailPanel({
         {show.tourName && (
           <div
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
               marginTop: 8,
-              letterSpacing: ".04em",
             }}
           >
             {show.tourName}
@@ -175,11 +172,9 @@ export function ShowDetailPanel({
       <div>
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
             marginBottom: 6,
           }}
         >
@@ -198,8 +193,8 @@ export function ShowDetailPanel({
         {show.seat && (
           <div
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
               marginTop: 6,
             }}
@@ -213,11 +208,9 @@ export function ShowDetailPanel({
       <div>
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
             marginBottom: 6,
           }}
         >
@@ -237,9 +230,9 @@ export function ShowDetailPanel({
         {countdown && (
           <div
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
-              color: "var(--accent)",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
+              color: "var(--accent-strong)",
               marginTop: 4,
             }}
           >
@@ -249,8 +242,8 @@ export function ShowDetailPanel({
         {show.pricePaid && (
           <div
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               color: "var(--muted)",
               marginTop: 6,
             }}
@@ -279,11 +272,9 @@ export function ShowDetailPanel({
       >
         <div
           style={{
-            fontFamily: "var(--font-geist-mono), monospace",
-            fontSize: 9.5,
+            fontFamily: "var(--font-geist-sans), sans-serif",
+            fontSize: 11.5,
             color: "var(--faint)",
-            letterSpacing: ".1em",
-            textTransform: "uppercase",
             marginBottom: 2,
           }}
         >
@@ -294,8 +285,8 @@ export function ShowDetailPanel({
             onClick={onStateTransition}
             style={{
               padding: "8px 14px",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
+              background: "var(--ink)",
+              color: "var(--bg)",
               border: "none",
               fontFamily: "var(--font-geist-sans), sans-serif",
               fontSize: 12.5,
@@ -314,8 +305,8 @@ export function ShowDetailPanel({
             onClick={onStateTransition}
             style={{
               padding: "8px 14px",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
+              background: "var(--ink)",
+              color: "var(--bg)",
               border: "none",
               fontFamily: "var(--font-geist-sans), sans-serif",
               fontSize: 12.5,

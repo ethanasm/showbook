@@ -75,7 +75,7 @@ export function DeleteShowConfirmModal({
               margin: 0,
               fontFamily: "var(--font-display)",
               fontSize: 20,
-              fontWeight: 700,
+              fontWeight: 600,
               color: "var(--ink)",
             }}
           >
@@ -112,8 +112,8 @@ export function DeleteShowConfirmModal({
             disabled={deleting}
             data-testid="delete-show-cancel"
             style={{
-              fontFamily: "var(--font-geist-mono)",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans)",
+              fontSize: 11.5,
               fontWeight: 500,
               color: "var(--ink)",
               background: "transparent",
@@ -121,8 +121,6 @@ export function DeleteShowConfirmModal({
               borderRadius: 0,
               padding: "6px 12px",
               cursor: deleting ? "not-allowed" : "pointer",
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
             }}
           >
             Cancel
@@ -133,8 +131,8 @@ export function DeleteShowConfirmModal({
             disabled={deleting}
             data-testid="delete-show-confirm"
             style={{
-              fontFamily: "var(--font-geist-mono)",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans)",
+              fontSize: 11.5,
               fontWeight: 600,
               color: "#fff",
               background: "#E63946",
@@ -142,8 +140,6 @@ export function DeleteShowConfirmModal({
               borderRadius: 0,
               padding: "6px 12px",
               cursor: deleting ? "not-allowed" : "pointer",
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               opacity: deleting ? 0.6 : 1,
             }}
           >
