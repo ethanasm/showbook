@@ -29,7 +29,7 @@ export default function ShowDetailPage() {
           style={{
             background: "none",
             border: "none",
-            color: "var(--accent)",
+            color: "var(--accent-strong)",
             cursor: "pointer",
             fontFamily: "inherit",
             fontSize: "inherit",

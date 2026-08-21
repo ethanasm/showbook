@@ -84,7 +84,7 @@ export function ScrapeConfigSection({
               <strong>Frequency:</strong> every {config.frequencyDays} day
               {config.frequencyDays === 1 ? "" : "s"}
             </div>
-            <div style={{ color: "var(--muted)", fontSize: 12 }}>
+            <div style={{ color: "var(--muted)", fontSize: 12.5 }}>
               {lastRun ? (
                 <>
                   Last scrape:{" "}
@@ -104,8 +104,8 @@ export function ScrapeConfigSection({
                 type="button"
                 onClick={() => setEditing(true)}
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   padding: "4px 10px",
                   border: "1px solid var(--rule)",
                   background: "transparent",
@@ -128,8 +128,8 @@ export function ScrapeConfigSection({
                 }}
                 disabled={saveMutation.isPending}
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   padding: "4px 10px",
                   border: "1px solid var(--rule)",
                   background: "transparent",
@@ -153,7 +153,7 @@ export function ScrapeConfigSection({
             }}
             style={{ display: "flex", flexDirection: "column", gap: 10 }}
           >
-            <p style={{ color: "var(--muted)", fontSize: 12, margin: 0 }}>
+            <p style={{ color: "var(--muted)", fontSize: 12.5, margin: 0 }}>
               Paste the URL of {venueName}&apos;s upcoming-events page.
               We&apos;ll fetch the page weekly and use AI to extract upcoming
               shows.
@@ -165,8 +165,8 @@ export function ScrapeConfigSection({
               placeholder="https://example.com/upcoming"
               required
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 12,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 12.5,
                 padding: "8px 10px",
                 border: "1px solid var(--rule)",
                 background: "var(--surface2)",
@@ -178,7 +178,7 @@ export function ScrapeConfigSection({
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                fontSize: 12,
+                fontSize: 12.5,
               }}
             >
               Check every
@@ -186,8 +186,8 @@ export function ScrapeConfigSection({
                 value={frequency}
                 onChange={(e) => setFrequency(Number(e.target.value))}
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 12,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 12.5,
                   padding: "4px 8px",
                   border: "1px solid var(--rule)",
                   background: "var(--surface2)",
@@ -205,11 +205,11 @@ export function ScrapeConfigSection({
                 type="submit"
                 disabled={saveMutation.isPending || !url.trim()}
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 11,
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
                   padding: "6px 12px",
-                  border: "1px solid var(--accent)",
-                  background: "var(--accent)",
+                  border: "1px solid var(--ink)",
+                  background: "var(--ink)",
                   color: "var(--bg)",
                   cursor: saveMutation.isPending ? "default" : "pointer",
                 }}
@@ -221,8 +221,8 @@ export function ScrapeConfigSection({
                   type="button"
                   onClick={() => setEditing(false)}
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     padding: "6px 12px",
                     border: "1px solid var(--rule)",
                     background: "transparent",
@@ -235,7 +235,7 @@ export function ScrapeConfigSection({
               )}
             </div>
             {saveMutation.error && (
-              <div style={{ color: "var(--kind-theatre)", fontSize: 12 }}>
+              <div style={{ color: "var(--kind-theatre)", fontSize: 12.5 }}>
                 {saveMutation.error.message}
               </div>
             )}

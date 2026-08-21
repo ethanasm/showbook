@@ -25,7 +25,7 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
-        background: checked ? "var(--accent)" : "rgba(128,128,128,.3)",
+        background: checked ? "var(--ink)" : "rgba(128,128,128,.3)",
         opacity: disabled ? 0.5 : 1,
         cursor: disabled ? "not-allowed" : "pointer",
       }}
@@ -38,7 +38,7 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
           borderRadius: 8,
           transition: "all 0.15s ease",
           transform: checked ? "translateX(16px)" : "translateX(0px)",
-          background: checked ? "var(--accent-text)" : "rgba(255,255,255,.7)",
+          background: checked ? "var(--bg)" : "rgba(255,255,255,.7)",
         }}
       />
     </button>

@@ -6,7 +6,7 @@ import { ExternalSourceDisclaimer } from "../external-connection/ExternalSourceD
 import { SpotifyImportPicker } from "./SpotifyImportPicker";
 import { useSpotifyImport } from "./useSpotifyImport";
 
-const mono = "var(--font-geist-mono)";
+const sans = "var(--font-geist-sans)";
 
 export function SpotifyImport() {
   const flow = useSpotifyImport();
@@ -58,11 +58,10 @@ export function SpotifyImport() {
           </div>
           <div
             style={{
-              fontFamily: mono,
-              fontSize: 10.5,
-              color: isConnected ? "var(--accent)" : "var(--muted)",
+              fontFamily: sans,
+              fontSize: 11.5,
+              color: isConnected ? "var(--accent-strong)" : "var(--muted)",
               marginTop: 3,
-              letterSpacing: ".04em",
             }}
           >
             {isConnected
@@ -74,11 +73,10 @@ export function SpotifyImport() {
           {flow.importedCount !== null && (
             <div
               style={{
-                fontFamily: mono,
-                fontSize: 10.5,
-                color: "var(--accent)",
+                fontFamily: sans,
+                fontSize: 11.5,
+                color: "var(--accent-strong)",
                 marginTop: 6,
-                letterSpacing: ".04em",
               }}
             >
               Imported {flow.importedCount} artist{flow.importedCount === 1 ? "" : "s"}.
@@ -87,11 +85,10 @@ export function SpotifyImport() {
           {(flow.error || disconnect.error) && (
             <div
               style={{
-                fontFamily: mono,
-                fontSize: 10.5,
+                fontFamily: sans,
+                fontSize: 11.5,
                 color: "#E63946",
                 marginTop: 6,
-                letterSpacing: ".04em",
               }}
             >
               {flow.error ?? disconnect.error?.message}
@@ -166,8 +163,8 @@ const connectButtonStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
-  fontFamily: mono,
-  fontSize: 10.5,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
   color: "var(--ink)",
   background: "transparent",
@@ -175,14 +172,12 @@ const connectButtonStyle: React.CSSProperties = {
   borderRadius: 0,
   padding: "6px 12px",
   cursor: "pointer",
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
   flexShrink: 0,
 };
 
 const disconnectButtonStyle: React.CSSProperties = {
-  fontFamily: mono,
-  fontSize: 10,
+  fontFamily: sans,
+  fontSize: 11.5,
   fontWeight: 500,
   color: "var(--muted)",
   background: "transparent",
@@ -190,7 +185,5 @@ const disconnectButtonStyle: React.CSSProperties = {
   borderRadius: 0,
   padding: "5px 10px",
   cursor: "pointer",
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
   flexShrink: 0,
 };

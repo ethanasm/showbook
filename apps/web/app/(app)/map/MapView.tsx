@@ -290,14 +290,14 @@ function TopBar({ venues }: { venues: VenueGroup[] }) {
             }}>
               <button type="button" onClick={exportCSV} style={{
                 display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none",
-                color: "var(--ink)", fontFamily: "var(--font-geist-mono)", fontSize: 11,
+                color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 11.5,
                 textAlign: "left", cursor: "pointer", borderBottom: "1px solid var(--rule)",
               }}>
                 Export as CSV
               </button>
               <button type="button" onClick={exportJSON} style={{
                 display: "block", width: "100%", padding: "10px 14px", background: "none", border: "none",
-                color: "var(--ink)", fontFamily: "var(--font-geist-mono)", fontSize: 11,
+                color: "var(--ink)", fontFamily: "var(--font-geist-sans)", fontSize: 11.5,
                 textAlign: "left", cursor: "pointer",
               }}>
                 Export as JSON
@@ -713,7 +713,7 @@ function VenueInspector({
                   )}
                 </div>
                 <div className="venue-inspector__visit-seat">
-                  {show.seat ? show.seat.toLowerCase() : "general"}
+                  {show.seat ? show.seat : "General"}
                 </div>
               </div>
               <div className="venue-inspector__visit-price">
@@ -1158,7 +1158,7 @@ export default function MapView() {
                           fontWeight: 600,
                           color: "#0C0C0C",
                           fontFamily:
-                            'var(--font-geist-mono, "Geist Mono", monospace)',
+                            'var(--font-geist-sans), sans-serif',
                         }}
                       >
                         {count}

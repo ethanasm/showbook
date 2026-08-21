@@ -194,9 +194,8 @@ export function Tooltip({
                 background: "var(--surface2)",
                 border: "1px solid var(--rule-strong)",
                 color: "var(--ink)",
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                letterSpacing: ".04em",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 padding: "4px 8px",
                 // Wrap long labels (e.g. badge tooltips on narrow mobile
                 // viewports) instead of clipping off-screen. The

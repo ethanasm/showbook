@@ -7,7 +7,8 @@
  * each redefining them.
  */
 
-import { formatDateParts } from "@showbook/shared";
+
+import { toDateParts } from "@/lib/date-parts";
 import type { ShowKind, ShowState } from "@/components/design-system";
 import type { SortConfig as SortConfigBase } from "@/components/SortHeader";
 import { compareNullable } from "@/lib/sort";
@@ -116,7 +117,7 @@ export const MONTH_NAMES = [
 ];
 
 export const SHOW_LIST_GRID_TEMPLATE =
-  "14px 32px 80px 110px 1.02fr 1.03fr 110px 0.15fr 64px 88px";
+  "14px 32px 92px 104px 1.02fr 1.03fr 118px 0.15fr 64px 92px";
 
 export const MODE_LABELS: Record<
   ShowsListMode,
@@ -142,9 +143,10 @@ export const MODE_LABELS: Record<
 // Helpers
 // ---------------------------------------------------------------------------
 
-// Re-exported from shared as `formatDateParts` — keep the local alias so the
-// existing call sites read naturally (`toDateParts(show.date)`).
-export const toDateParts = formatDateParts;
+// Re-exported so the existing `toDateParts(show.date)` call sites in this
+// folder keep reading naturally. The implementation (and the reason web
+// title-cases the month) lives in `@/lib/date-parts`.
+export { toDateParts };
 
 export function defaultDirFor(field: SortField): "asc" | "desc" {
   return field === "date" || field === "paid" ? "desc" : "asc";

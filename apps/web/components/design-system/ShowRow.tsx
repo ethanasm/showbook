@@ -7,7 +7,7 @@ import { StateChip, type ShowState } from "./StateChip";
 import type { ShowKind } from "./KindBadge";
 import { RemoteImage } from "./RemoteImage";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { KIND_LABELS } from "@/lib/kind-icons";
 
 export interface Show {
   kind: ShowKind;
@@ -61,9 +61,6 @@ export function ShowRow({
     show.state === "past"
       ? { borderColor: `var(--kind-${show.kind})` }
       : {};
-
-  /* ── kind icon ── */
-  const KindIcon = KIND_ICONS[show.kind];
 
   /* ── paid formatting ── */
   const count = show.ticketCount ?? 1;
@@ -131,8 +128,11 @@ export function ShowRow({
 
       {/* 4. Kind icon + label */}
       <div className="show-row__kind">
-        <KindIcon size={14} className={`show-row__kind-icon show-row__kind-icon--${show.kind}`} />
-        <span className={`show-row__kind-label show-row__kind-label--${show.kind}`}>
+        <span
+          aria-hidden="true"
+          className={`show-row__kind-icon show-row__kind-icon--${show.kind}`}
+        />
+        <span className="show-row__kind-label">
           {KIND_LABELS[show.kind]}
         </span>
       </div>

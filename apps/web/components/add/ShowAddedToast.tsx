@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Check, Plus, X } from "lucide-react";
 import type { FollowSeedEntity } from "@showbook/shared";
-import { mono, sans } from "@/app/(app)/add/constants";
+import { sans } from "@/app/(app)/add/constants";
 
 export interface ShowAddedToastHandlers {
   onUndo: () => Promise<void> | void;
@@ -77,12 +77,11 @@ export function ShowAddedToast({
         gap: 6,
         padding: "6px 11px",
         borderRadius: 999,
-        border: `1px solid ${state === "done" ? "var(--accent)" : "var(--rule-strong)"}`,
+        border: `1px solid ${state === "done" ? "var(--ink)" : "var(--rule-strong)"}`,
         background: "transparent",
-        color: state === "done" ? "var(--accent)" : "var(--ink)",
-        fontFamily: mono,
-        fontSize: 10.5,
-        letterSpacing: ".04em",
+        color: state === "done" ? "var(--accent-strong)" : "var(--ink)",
+        fontFamily: sans,
+        fontSize: 11.5,
         cursor: state === "idle" ? "pointer" : "default",
         opacity: state === "pending" ? 0.6 : 1,
         maxWidth: 220,
@@ -159,10 +158,8 @@ export function ShowAddedToast({
             border: "none",
             padding: "2px 14px 2px 4px",
             color: "var(--muted)",
-            fontFamily: mono,
-            fontSize: 10.5,
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
+            fontFamily: sans,
+            fontSize: 11.5,
             cursor: "pointer",
             opacity: undoing ? 0.5 : 1,
           }}
@@ -174,10 +171,9 @@ export function ShowAddedToast({
         <>
           <div
             style={{
-              fontFamily: mono,
-              fontSize: 10.5,
+              fontFamily: sans,
+              fontSize: 11.5,
               color: "var(--muted)",
-              letterSpacing: ".04em",
               lineHeight: 1.5,
             }}
           >

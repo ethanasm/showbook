@@ -30,7 +30,8 @@ import {
   countFestivalActualSongs,
 } from "@/lib/show-accessors";
 import { MediaSection } from "@/components/media";
-import { TicketStatusBadge } from "@/components/design-system";
+import { KindSwatch, TicketStatusBadge } from "@/components/design-system";
+import type { DiscoverKindKey } from "@/lib/kind-icons";
 import { ShowTabs } from "./ShowTabs";
 import { OverviewTab, type OverviewLineupEntry } from "./OverviewTab";
 import { DeleteShowConfirmModal } from "./DeleteShowConfirmModal";
@@ -250,7 +251,8 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
     const venueLabel = show.venue.name;
     const venueSub = isVenuePlaceholder(show.venue.city) ? undefined : show.venue.city;
     const seatLabel = show.seat ?? "—";
-    const seatSub = show.ticketCount > 1 ? `${show.ticketCount} tix` : "1 tix";
+    const seatSub =
+      show.ticketCount > 1 ? `${show.ticketCount} tickets` : "1 ticket";
     const priceLabel = show.pricePaid
       ? `$${parseFloat(show.pricePaid).toFixed(0)}`
       : "—";
@@ -264,10 +266,10 @@ function ShowDetailTabsViewInner({ show }: ShowDetailTabsViewProps) {
         ? "Have tickets"
         : "Watching";
     return [
-      { label: "VENUE", value: venueLabel, sub: venueSub, href: `/venues/${show.venue.id}` },
-      { label: "SEAT", value: seatLabel, sub: seatSub },
-      { label: "PAID", value: priceLabel, sub: priceSub || undefined },
-      { label: "STATE", value: stateLabel },
+      { label: "Venue", value: venueLabel, sub: venueSub, href: `/venues/${show.venue.id}` },
+      { label: "Seat", value: seatLabel, sub: seatSub },
+      { label: "Paid", value: priceLabel, sub: priceSub || undefined },
+      { label: "State", value: stateLabel },
     ];
   }, [isPast, show]);
 
@@ -643,24 +645,14 @@ function ShowHeaderStrip({
       }}
       data-testid="show-tabs-header"
     >
-      <div
-        style={{
-          fontFamily: "var(--font-geist-mono), monospace",
-          fontSize: 10.5,
-          color: "var(--muted)",
-          letterSpacing: ".12em",
-          textTransform: "uppercase",
-        }}
-      >
-        {show.kind}
-      </div>
+      <KindSwatch kind={show.kind as DiscoverKindKey} />
       <h1
         className="display-title"
         style={{
           margin: 0,
-          fontSize: 44,
-          letterSpacing: -1.5,
-          lineHeight: 0.96,
+          fontSize: 42,
+          letterSpacing: "-0.038em",
+          lineHeight: 1.05,
           fontWeight: 600,
         }}
       >
@@ -695,10 +687,9 @@ function ShowHeaderStrip({
           {countdown && (
             <span
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
-                color: "var(--accent)",
-                letterSpacing: ".04em",
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
+                color: "var(--accent-strong)",
               }}
             >
               {countdown}
@@ -707,10 +698,9 @@ function ShowHeaderStrip({
           {show.tourName && (
             <span
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
-                letterSpacing: ".04em",
               }}
             >
               · {show.tourName}
@@ -734,30 +724,26 @@ function ShowHeaderStrip({
               padding: "4px 10px",
               border: "1px solid var(--rule-strong)",
               color: "var(--muted)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
             }}
             data-testid="went-badge"
           >
-            went
+            Went
           </span>
         ) : show.state === "ticketed" ? (
           <span
             style={{
               padding: "4px 10px",
-              background: "var(--accent)",
-              color: "var(--accent-text)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              background: "var(--ink)",
+              color: "var(--bg)",
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               fontWeight: 600,
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
             }}
           >
-            tix
+            Ticketed
           </span>
         ) : (
           <span
@@ -765,14 +751,12 @@ function ShowHeaderStrip({
               padding: "4px 10px",
               border: "1px solid var(--ink)",
               color: "var(--ink)",
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 11.5,
               fontWeight: 500,
-              letterSpacing: ".18em",
-              textTransform: "uppercase",
             }}
           >
-            watching
+            Watching
           </span>
         )}
         </div>

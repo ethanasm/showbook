@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { mono, sans } from "@/app/(app)/add/constants";
+import { sans } from "@/app/(app)/add/constants";
 import type { GmailResult } from "@/app/(app)/add/types";
 
 type ScanGmailMutation = ReturnType<typeof trpc.enrichment.scanGmailForShow.useMutation>;
@@ -97,12 +97,12 @@ export function AddShowGmail({ gmail, headlinerName, onSelect }: AddShowGmailPro
   return (
     <div style={{ marginTop: 8, border: "1px solid var(--rule-strong)", background: "var(--surface)" }}>
       {gmail.scanning && (
-        <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--muted)", letterSpacing: ".04em" }}>
+        <div style={{ padding: "14px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--muted)" }}>
           Scanning Gmail for &ldquo;{headlinerName}&rdquo;...
         </div>
       )}
       {!gmail.scanning && gmail.results.length === 0 && (
-        <div style={{ padding: "14px 16px", fontFamily: mono, fontSize: 11, color: "var(--faint)", letterSpacing: ".04em", lineHeight: 1.6 }}>
+        <div style={{ padding: "14px 16px", fontFamily: sans, fontSize: 11.5, color: "var(--faint)", lineHeight: 1.6 }}>
           No ticket emails matched &ldquo;{headlinerName}&rdquo; in that inbox.
           If the receipt lives in another account, scan again and pick it —
           or just fill in the fields below.
@@ -122,7 +122,7 @@ export function AddShowGmail({ gmail, headlinerName, onSelect }: AddShowGmailPro
           <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 500, color: "var(--ink)", letterSpacing: -0.1 }}>
             {result.headliner}
           </div>
-          <div style={{ fontFamily: mono, fontSize: 10.5, color: "var(--muted)", letterSpacing: ".04em", display: "flex", gap: 12 }}>
+          <div style={{ fontFamily: sans, fontSize: 11.5, color: "var(--muted)", display: "flex", gap: 12 }}>
             {result.venue_name && <span>{result.venue_name}</span>}
             {result.date && <span>{result.date}</span>}
             {result.seat && <span>{result.seat}</span>}

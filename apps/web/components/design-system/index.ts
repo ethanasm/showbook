@@ -1,5 +1,6 @@
 export { ThemeProvider, useTheme } from "./ThemeProvider";
 export { KindBadge, type ShowKind } from "./KindBadge";
+export { KindSwatch } from "./KindSwatch";
 export { StateChip, type ShowState } from "./StateChip";
 export { TicketStatusBadge, type TicketStatus } from "./TicketStatusBadge";
 export { ShowRow, type Show } from "./ShowRow";

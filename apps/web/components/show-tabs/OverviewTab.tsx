@@ -138,26 +138,24 @@ export function OverviewTab({
                 display: "block",
                 padding: "16px 18px",
                 background: "var(--surface)",
-                borderLeft: "2px solid var(--accent)",
+                borderLeft: "2px solid var(--ink)",
                 color: "inherit",
                 textDecoration: "none",
               }}
             >
               <div
                 style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 9.5,
-                  color: "var(--faint)",
-                  letterSpacing: ".14em",
-                  textTransform: "uppercase",
+                  fontFamily: "var(--font-geist-sans), sans-serif",
+                  fontSize: 11.5,
+                  color: "var(--muted)",
                 }}
               >
-                {entry.role}
+                {entry.role.charAt(0).toUpperCase() + entry.role.slice(1)}
               </div>
               <div
                 style={{
                   fontFamily: "var(--font-geist-sans), sans-serif",
-                  fontSize: 19,
+                  fontSize: 17,
                   fontWeight: 600,
                   color: "var(--ink)",
                   letterSpacing: -0.4,
@@ -168,11 +166,10 @@ export function OverviewTab({
               {entry.characterName && (
                 <div
                   style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 10.5,
+                    fontFamily: "var(--font-geist-sans), sans-serif",
+                    fontSize: 11.5,
                     color: "var(--muted)",
                     marginTop: 4,
-                    letterSpacing: ".02em",
                   }}
                 >
                   as {entry.characterName}
@@ -183,10 +180,9 @@ export function OverviewTab({
           {lineup.length === 0 && (
             <div
               style={{
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 11,
+                fontFamily: "var(--font-geist-sans), sans-serif",
+                fontSize: 11.5,
                 color: "var(--muted)",
-                letterSpacing: ".02em",
               }}
             >
               No performers listed yet.
@@ -201,7 +197,7 @@ export function OverviewTab({
             const style: React.CSSProperties = {
               padding: "10px 14px",
               background: action.primary
-                ? "var(--accent)"
+                ? "var(--ink)"
                 : action.active
                   ? "var(--surface)"
                   : "transparent",
@@ -209,7 +205,7 @@ export function OverviewTab({
                 ? "none"
                 : `1px solid ${action.danger ? "rgba(230,57,70,0.25)" : action.active ? "var(--ink)" : "var(--rule-strong)"}`,
               color: action.primary
-                ? "var(--accent-text)"
+                ? "var(--bg)"
                 : action.danger
                   ? "#E63946"
                   : "var(--ink)",

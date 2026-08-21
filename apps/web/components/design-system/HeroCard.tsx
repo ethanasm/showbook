@@ -5,9 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import "./design-system.css";
 import type { ShowKind } from "./KindBadge";
-import { PulseLabel } from "./PulseLabel";
-import { MapPin, Ticket, Clock, Check } from "lucide-react";
-import { KIND_ICONS, KIND_LABELS } from "@/lib/kind-icons";
+import { KindSwatch } from "./KindSwatch";
 import { useLiveCountdown } from "@/lib/useLiveCountdown";
 
 export interface HeroShow {
@@ -39,9 +37,23 @@ interface HeroCardProps {
   show: HeroShow;
 }
 
+/**
+ * The hero spells the weekday out (`Friday`), where list rows keep the
+ * three-letter form the shared date formatter returns. It's the one date on
+ * the screen with room for it.
+ */
+const LONG_DOW: Record<string, string> = {
+  Sun: "Sunday",
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+};
+
 export function HeroCard({ show }: HeroCardProps) {
   const router = useRouter();
-  const KindIcon = KIND_ICONS[show.kind];
   const kindColor = `var(--kind-${show.kind})`;
   const showId = show.id;
   // Live ticker — falls through to the static countdown when no dateYmd
@@ -63,7 +75,6 @@ export function HeroCard({ show }: HeroCardProps) {
         cursor: showId ? "pointer" : undefined,
       }}
     >
-      <div className="glow-backdrop" style={{ opacity: 0.55 }} />
       {show.headlinerImageUrl && (
         <div
           style={{
@@ -100,56 +111,16 @@ export function HeroCard({ show }: HeroCardProps) {
       <div className="hero-card__grid">
         {/* Left side */}
         <div className="hero-card__main">
-          <div style={{ marginBottom: 16 }}>
-            <PulseLabel>
-              Next up &middot; {countdownLabel} &middot; doors 7:00 pm
-            </PulseLabel>
-          </div>
-
-          {/* Kind badge + Ticketed chip row */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: 14,
-              flexWrap: "wrap",
-            }}
-          >
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 7,
-                fontFamily: "var(--font-geist-mono), monospace",
-                fontSize: 10.5,
-                color: kindColor,
-                letterSpacing: ".1em",
-                textTransform: "uppercase",
-                fontWeight: 500,
-              }}
-            >
-              <KindIcon size={13} color={kindColor} />
-              {KIND_LABELS[show.kind]}
-            </span>
-            {show.hasTix && (
-              <span
-                style={{
-                  fontFamily: "var(--font-geist-mono), monospace",
-                  fontSize: 10.5,
-                  color: "var(--ink)",
-                  padding: "3px 8px",
-                  border: "1px solid var(--accent)",
-                  letterSpacing: ".06em",
-                  textTransform: "uppercase",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                }}
-              >
-                <Check size={11} color="var(--accent)" /> Ticketed
-              </span>
-            )}
+          {/* Kind marker. The "Next up · in N days · doors 7:00 pm" pulse
+              label moved out to the section eyebrow above the card, and the
+              gold-bordered Ticketed chip became a word after the kind — so
+              the card opens on the headliner rather than on three
+              competing labels. */}
+          <div style={{ marginBottom: 12 }}>
+            <KindSwatch
+              kind={show.kind}
+              suffix={show.hasTix ? "· Ticketed" : undefined}
+            />
           </div>
 
           {/* Headliner */}
@@ -207,84 +178,44 @@ export function HeroCard({ show }: HeroCardProps) {
             </div>
           )}
 
-          {/* Meta row */}
+          {/* Meta row — labelled columns */}
           <div className="hero-card__meta">
-            {/* Venue */}
-            <div
-              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-            >
-              <MapPin size={14} color="var(--muted)" />
-              <div>
-                <div>
-                  {show.venueId ? (
-                    <Link
-                      href={`/venues/${show.venueId}`}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ color: "inherit", textDecoration: "none" }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.textDecoration = "underline")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.textDecoration = "none")
-                      }
-                    >
-                      {show.venue}
-                    </Link>
-                  ) : (
-                    show.venue
-                  )}
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    color: "var(--muted)",
-                    marginTop: 2,
-                  }}
-                >
-                  {show.city}
-                </div>
+            <div>
+              <div className="hero-card__meta-label">Venue</div>
+              <div className="hero-card__meta-value">
+                {show.venueId ? (
+                  <Link
+                    href={`/venues/${show.venueId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ color: "inherit", textDecoration: "none" }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.textDecoration = "underline")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.textDecoration = "none")
+                    }
+                  >
+                    {show.venue}
+                  </Link>
+                ) : (
+                  show.venue
+                )}
               </div>
+              <div className="hero-card__meta-sub">{show.city}</div>
             </div>
 
-            {/* Seat */}
-            <div
-              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-            >
-              <Ticket size={14} color="var(--muted)" />
-              <div>
-                <div>{show.seat}</div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    color: "var(--muted)",
-                    marginTop: 2,
-                  }}
-                >
-                  ${show.paid} &middot; paid
-                </div>
-              </div>
+            <div>
+              <div className="hero-card__meta-label">Doors</div>
+              <div className="hero-card__meta-value">7:00 pm</div>
+              <div className="hero-card__meta-sub">Show 8:00 pm</div>
             </div>
 
-            {/* Doors / Show time */}
-            <div
-              style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-            >
-              <Clock size={14} color="var(--muted)" />
-              <div>
-                <div>doors 7:00 pm</div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-geist-mono), monospace",
-                    fontSize: 11,
-                    color: "var(--muted)",
-                    marginTop: 2,
-                  }}
-                >
-                  show 8:00 pm
-                </div>
-              </div>
+            <div>
+              <div className="hero-card__meta-label">Paid</div>
+              <div className="hero-card__meta-value">${show.paid}</div>
+              {show.seat && (
+                <div className="hero-card__meta-sub">{show.seat}</div>
+              )}
             </div>
           </div>
         </div>
@@ -295,41 +226,23 @@ export function HeroCard({ show }: HeroCardProps) {
           <div
             className="hero-card__date-dow"
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 11,
-              color: kindColor,
-              letterSpacing: ".12em",
-              textTransform: "uppercase",
-              fontWeight: 500,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
+              color: "var(--muted)",
             }}
           >
-            {show.date.dow}
+            {LONG_DOW[show.date.dow] ?? show.date.dow}
           </div>
-          <div
-            className="hero-card__date-day gradient-emphasis"
-          >
-            {show.date.day}
-          </div>
-          <div
-            className="hero-card__date-month"
-            style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 12,
-              color: "var(--ink)",
-              letterSpacing: ".14em",
-              textTransform: "uppercase",
-              fontWeight: 500,
-            }}
-          >
-            {show.date.month}
+          <div className="hero-card__date-headline">
+            <span className="hero-card__date-day">{show.date.day}</span>
+            <span className="hero-card__date-month">{show.date.month}</span>
           </div>
           <div
             className="hero-card__date-countdown"
             style={{
-              fontFamily: "var(--font-geist-mono), monospace",
-              fontSize: 10.5,
+              fontFamily: "var(--font-geist-sans), sans-serif",
+              fontSize: 12.5,
               color: "var(--muted)",
-              letterSpacing: ".06em",
             }}
           >
             {countdownLabel}

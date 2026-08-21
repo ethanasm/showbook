@@ -32,9 +32,7 @@ export default function GlobalError({
         >
           <div
             style={{
-              fontSize: 11,
-              letterSpacing: ".12em",
-              textTransform: "uppercase",
+              fontSize: 11.5,
               color: "rgba(245,245,243,.55)",
               marginBottom: 14,
             }}
@@ -60,10 +58,8 @@ export default function GlobalError({
             onClick={() => reset()}
             style={{
               padding: "9px 18px",
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: 500,
-              letterSpacing: ".06em",
-              textTransform: "uppercase",
               background: "#F5F5F3",
               color: "#0C0C0C",
               border: "1px solid #F5F5F3",
@@ -76,9 +72,8 @@ export default function GlobalError({
             <div
               style={{
                 marginTop: 18,
-                fontSize: 10.5,
+                fontSize: 11.5,
                 color: "rgba(245,245,243,.32)",
-                letterSpacing: ".06em",
               }}
             >
               ref: {error.digest}

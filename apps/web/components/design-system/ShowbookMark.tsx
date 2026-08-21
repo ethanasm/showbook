@@ -62,7 +62,9 @@ export function ShowbookMark({
           x="32"
           y="40"
           fontFamily="var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Inter', 'Helvetica Neue', sans-serif"
-          fontWeight={900}
+          // Archivo loads 400/500/600 only; 700 is the heaviest the punched
+          // -out `S` can ask for without the browser synthesising a bold.
+          fontWeight={700}
           fontSize={23}
           fill="#0B0B0A"
           textAnchor="middle"

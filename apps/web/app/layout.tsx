@@ -1,36 +1,25 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Archivo } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
 import { TRPCProvider } from "@/lib/trpc";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import "./globals.css";
 
-// Type system — matches the design handoff (`docs/design/.../README.md`):
-// Geist for all UI/body/numbers, Geist Mono for labels/metadata, and
-// Fraunces as the editorial display face for headliners/show titles/hero
-// (mirrors `apps/mobile/lib/fonts.ts`, which loads the same three families).
-// The sans/mono CSS variables keep their `--font-geist-*` names so every
-// inline-style reference across the app keeps working unchanged — and now
-// the names finally match the fonts they point at.
-const sansFont = Geist({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-geist-sans",
-  display: "swap",
-});
-const monoFont = Geist_Mono({
+// Type system — one family, three weights (design handoff: "Showbook web —
+// typography system, direction 1b"). Archivo 400/500/600 replaces the old
+// Geist / Geist Mono / Fraunces trio: figures keep their alignment through
+// Archivo's tabular numerals (`font-feature-settings: "tnum"`) rather than a
+// monospace face, and display sizes use 600 rather than a serif at 700.
+// The variable keeps its `--font-geist-sans` name so the several hundred
+// inline-style call sites across the app keep resolving; `--font-geist-mono`
+// and `--font-display` are aliased to the same stack in `globals.css` so any
+// site not yet migrated still lands on Archivo.
+const sansFont = Archivo({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-geist-mono",
-  display: "swap",
-});
-const displayFont = Fraunces({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  style: ["normal", "italic"],
-  variable: "--font-fraunces",
+  variable: "--font-geist-sans",
   display: "swap",
 });
 
@@ -86,7 +75,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sansFont.variable} ${monoFont.variable} ${displayFont.variable}`}
+      className={sansFont.variable}
     >
       <body style={{ fontFamily: "var(--font-geist-sans), sans-serif" }}>
         <Suspense fallback={null}>
