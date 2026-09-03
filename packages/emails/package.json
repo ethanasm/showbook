@@ -20,11 +20,11 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.1.0",
-    "react-email": "^6.9.2",
-    "tsx": "^4.23.12",
+    "react-email": "^6.9.3",
+    "tsx": "^4.23.13",
     "typescript": "~6.0.3"
   }
 }
