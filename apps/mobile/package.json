@@ -81,7 +81,7 @@
     "@playwright/test": "^1.63.0",
     "@showbook/api": "workspace:*",
     "@testing-library/react-native": "^14.0.1",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.5.1",
     "@types/react": "^19.2.15",
     "babel-preset-expo": "~57.0.10",
     "eslint": "^9.39.5",
@@ -89,7 +89,7 @@
     "react-test-renderer": "19.2.3",
     "tsx": "^4.23.13",
     "typescript": "~6.0.3",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   },
   "expo": {
     "autolinking": {
