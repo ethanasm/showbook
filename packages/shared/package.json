@@ -15,7 +15,7 @@
     "lint": "eslint --no-config-lookup -c ../../eslint.config.packages.mjs src"
   },
   "devDependencies": {
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   }
 }
