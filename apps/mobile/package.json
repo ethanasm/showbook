@@ -81,7 +81,7 @@
     "@playwright/test": "^1.63.0",
     "@showbook/api": "workspace:*",
     "@testing-library/react-native": "^14.0.1",
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.2.15",
     "babel-preset-expo": "~57.0.13",
     "eslint": "^9.39.5",

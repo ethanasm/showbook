@@ -20,7 +20,7 @@
     "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.4",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.1.0",
     "react-email": "^6.11.0",
