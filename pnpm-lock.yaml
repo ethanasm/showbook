@@ -294,8 +294,8 @@ importers:
         specifier: ^11.18.0
         version: 11.18.0(typescript@6.0.3)
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
+        specifier: ^0.45.3
+        version: 0.45.3(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       geist:
         specifier: ^1.7.2
         version: 1.7.2(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.63.0)(@types/node@26.6.3)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
@@ -415,8 +415,8 @@ importers:
         specifier: ^11.18.0
         version: 11.18.0(typescript@6.0.3)
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
+        specifier: ^0.45.3
+        version: 0.45.3(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       groq-sdk:
         specifier: ^1.5.0
         version: 1.5.0
@@ -455,8 +455,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
+        specifier: ^0.45.3
+        version: 0.45.3(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       postgres:
         specifier: ^3.4.5
         version: 3.4.9
@@ -526,8 +526,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
+        specifier: ^0.45.3
+        version: 0.45.3(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       pg-boss:
         specifier: ^12.27.0
         version: 12.27.0
@@ -576,8 +576,8 @@ importers:
         specifier: workspace:*
         version: link:../observability
       drizzle-orm:
-        specifier: ^0.45.2
-        version: 0.45.2(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
+        specifier: ^0.45.3
+        version: 0.45.3(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       groq-sdk:
         specifier: ^1.5.0
         version: 1.5.0
@@ -2805,8 +2805,8 @@ packages:
     peerDependencies:
       '@types/react': ^19.2.0
 
-  '@types/react-reconciler@0.33.0':
-    resolution: {integrity: sha512-HZOXsKT0tGI9LlUw2LuedXsVeB88wFa536vVL0M6vE8zN63nI+sSr1ByxmPToP5K5bukaVscyeCJcF9guVNJ1g==}
+  '@types/react-reconciler@0.33.1':
+    resolution: {integrity: sha512-0kF59ji2mKuHUd5wytHSpmORybMYVerJvq0K10pz9ZFoOlJ3e+w1LBjLshWpCrokeyQOioRodNbO4PH4ddvRfg==}
     peerDependencies:
       '@types/react': '*'
 
@@ -3751,8 +3751,8 @@ packages:
     resolution: {integrity: sha512-YCYqxTLIB2OCqf6w9/Vef13baBVbwQIPcbT4Y56AfO6B9ajZhDhD8Jkveg/hJvT/iuMloKD/IYYkyMMNhr7Kqg==}
     hasBin: true
 
-  drizzle-orm@0.45.2:
-    resolution: {integrity: sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==}
+  drizzle-orm@0.45.3:
+    resolution: {integrity: sha512-CAloER21cDdcgZ1OmjrZX82EeRNsdP+y0onX/eyoYDaYzki/adrAa91lzM5jWh7zZPK4qUbw/6LGv9J+A+uizA==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'
@@ -3760,6 +3760,7 @@ packages:
       '@libsql/client': '>=0.10.0'
       '@libsql/client-wasm': '>=0.10.0'
       '@neondatabase/serverless': '>=0.10.0'
+      '@netlify/db': '>=0.4.0'
       '@op-engineering/op-sqlite': '>=2'
       '@opentelemetry/api': ^1.4.1
       '@planetscale/database': '>=1.13'
@@ -3795,6 +3796,8 @@ packages:
       '@libsql/client-wasm':
         optional: true
       '@neondatabase/serverless':
+        optional: true
+      '@netlify/db':
         optional: true
       '@op-engineering/op-sqlite':
         optional: true
@@ -9602,7 +9605,7 @@ snapshots:
     dependencies:
       '@types/react': 19.2.15
 
-  '@types/react-reconciler@0.33.0(@types/react@19.2.15)':
+  '@types/react-reconciler@0.33.1(@types/react@19.2.15)':
     dependencies:
       '@types/react': 19.2.15
 
@@ -10629,7 +10632,7 @@ snapshots:
       esbuild: 0.28.2
       tsx: 4.23.15
 
-  drizzle-orm@0.45.2(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9):
+  drizzle-orm@0.45.3(expo-sqlite@57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9):
     optionalDependencies:
       expo-sqlite: 57.0.3(expo@57.0.25)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
       pg: 8.23.0
@@ -14379,7 +14382,7 @@ snapshots:
 
   test-renderer@1.2.0(@types/react@19.2.15)(react@19.2.3):
     dependencies:
-      '@types/react-reconciler': 0.33.0(@types/react@19.2.15)
+      '@types/react-reconciler': 0.33.1(@types/react@19.2.15)
       react: 19.2.3
       react-reconciler: 0.33.0(react@19.2.3)
     transitivePeerDependencies:
