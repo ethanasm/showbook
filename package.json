@@ -69,8 +69,8 @@
     "setup:runner": "bash scripts/setup-runner.sh"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
-    "nx": "^23.2.1",
+    "@types/node": "^26.6.5",
+    "nx": "^23.3.0",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
