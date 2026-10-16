@@ -59,7 +59,7 @@
     "expo-updates": "~57.0.24",
     "expo-web-browser": "~57.0.3",
     "fflate": "^0.8.3",
-    "lucide-react-native": "^1.38.0",
+    "lucide-react-native": "^1.55.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.0",
