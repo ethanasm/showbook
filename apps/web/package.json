@@ -28,7 +28,7 @@
     "@showbook/jobs": "workspace:*",
     "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
-    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-query": "^5.104.4",
     "@trpc/client": "^11.19.0",
     "@trpc/react-query": "^11.18.0",
     "@trpc/server": "^11.18.0",
