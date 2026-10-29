@@ -345,8 +345,8 @@ importers:
         specifier: ^2.2.6
         version: 2.2.6
       unpdf:
-        specifier: ^1.8.1
-        version: 1.8.1(@napi-rs/canvas@0.1.80)
+        specifier: ^1.9.1
+        version: 1.9.1(@napi-rs/canvas@0.1.80)
     devDependencies:
       '@eslint/eslintrc':
         specifier: ^3.3.7
@@ -433,8 +433,8 @@ importers:
         specifier: ^2.2.6
         version: 2.2.6
       unpdf:
-        specifier: ^1.8.1
-        version: 1.8.1(@napi-rs/canvas@0.1.80)
+        specifier: ^1.9.1
+        version: 1.9.1(@napi-rs/canvas@0.1.80)
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -6888,8 +6888,8 @@ packages:
     resolution: {integrity: sha512-hpbDzxUY9BFwX+UeBnxv3Sh1q7HFxj48DTmXchNgRa46lO8uj3/1iEn3MiNUYTg1g9ctIqXCCERn8gYZhHC5lQ==}
     engines: {node: '>=4'}
 
-  unpdf@1.8.1:
-    resolution: {integrity: sha512-xkURhy2SoGpOIH0a1gLHNkASPIQYonadDJs2AQwPEfUakafeD9EA1WTWWsaR++gfTCXJpV27W7tU1nXuk82UKQ==}
+  unpdf@1.9.1:
+    resolution: {integrity: sha512-nO1npM2kNyd4hj1fKzUVU6bvnWjDSxI97eycM/DgzI83dYyW+pNRI9NeMQVEfef8fI3Q06i9lkMeE1HxrQqKoA==}
     engines: {node: '>=22'}
     peerDependencies:
       '@napi-rs/canvas': ^0.1.69 || ^1.0.0
@@ -14510,7 +14510,7 @@ snapshots:
 
   unicode-property-aliases-ecmascript@2.2.0: {}
 
-  unpdf@1.8.1(@napi-rs/canvas@0.1.80):
+  unpdf@1.9.1(@napi-rs/canvas@0.1.80):
     optionalDependencies:
       '@napi-rs/canvas': 0.1.80
 
