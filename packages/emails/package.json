@@ -23,7 +23,7 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.1.0",
-    "react-email": "^6.11.1",
+    "react-email": "^6.11.3",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   }
