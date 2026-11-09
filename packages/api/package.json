@@ -14,8 +14,8 @@
     "probe-audio-features": "tsx scripts/probe-audio-features.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1156.0",
-    "@aws-sdk/s3-request-presigner": "^3.1156.0",
+    "@aws-sdk/client-s3": "^3.1162.0",
+    "@aws-sdk/s3-request-presigner": "^3.1162.0",
     "@showbook/db": "workspace:*",
     "@showbook/observability": "workspace:*",
     "@showbook/shared": "workspace:*",
@@ -30,7 +30,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   }
