@@ -80,11 +80,11 @@ importers:
         specifier: ^5.104.4
         version: 5.104.4(@types/react@19.2.15)(react@19.2.3)
       '@trpc/client':
-        specifier: ^11.19.0
-        version: 11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3)
+        specifier: ^11.28.0
+        version: 11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3)
       '@trpc/react-query':
-        specifier: ^11.18.0
-        version: 11.18.0(@tanstack/react-query@5.104.4(@types/react@19.2.15)(react@19.2.3))(@trpc/client@11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.18.0(typescript@6.0.3))(react@19.2.3)(typescript@6.0.3)
+        specifier: ^11.28.0
+        version: 11.28.0(@tanstack/react-query@5.104.4(@types/react@19.2.15)(react@19.2.3))(@trpc/client@11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(react@19.2.3)(typescript@6.0.3)
       expo:
         specifier: ~57.0.31
         version: 57.0.31(@babel/core@7.29.7)(@expo/dom-webview@57.0.0)(@expo/metro-runtime@57.0.17)(expo-router@57.0.29)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -285,14 +285,14 @@ importers:
         specifier: ^5.104.4
         version: 5.104.4(@types/react@19.2.15)(react@19.2.3)
       '@trpc/client':
-        specifier: ^11.19.0
-        version: 11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3)
+        specifier: ^11.28.0
+        version: 11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3)
       '@trpc/react-query':
-        specifier: ^11.18.0
-        version: 11.18.0(@tanstack/react-query@5.104.4(@types/react@19.2.15)(react@19.2.3))(@trpc/client@11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.18.0(typescript@6.0.3))(react@19.2.3)(typescript@6.0.3)
+        specifier: ^11.28.0
+        version: 11.28.0(@tanstack/react-query@5.104.4(@types/react@19.2.15)(react@19.2.3))(@trpc/client@11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(react@19.2.3)(typescript@6.0.3)
       '@trpc/server':
-        specifier: ^11.18.0
-        version: 11.18.0(typescript@6.0.3)
+        specifier: ^11.28.0
+        version: 11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3)
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(expo-sqlite@57.0.4(expo@57.0.31)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
@@ -412,8 +412,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@trpc/server':
-        specifier: ^11.18.0
-        version: 11.18.0(typescript@6.0.3)
+        specifier: ^11.28.0
+        version: 11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3)
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(expo-sqlite@57.0.4(expo@57.0.31)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
@@ -2817,27 +2817,41 @@ packages:
     peerDependencies:
       '@testing-library/dom': '>=7.21.4'
 
-  '@trpc/client@11.19.0':
-    resolution: {integrity: sha512-0MKkPq6MejsKB5Opca1Rl22KVIaqo2+A1EiXyZ8EGUsl9TLrPdpGn+Usux20TZKFwnSC2+wI/WilqNJaP4ODfw==}
-    hasBin: true
+  '@trpc/client@11.28.0':
+    resolution: {integrity: sha512-uaj/19rUZKcUkQHAw8mBpjHeR5N/SJyCEy1HPPOC0fpgfV7Zz3cXbz/L9Tqhy+0YMlHwb0PuFGEo2krNjV+Sng==}
     peerDependencies:
-      '@trpc/server': 11.19.0
+      '@trpc/server': 11.28.0
       typescript: '>=5.7.2'
 
-  '@trpc/react-query@11.18.0':
-    resolution: {integrity: sha512-C1+Wwm2pCeUJucI+bnFpxGYjNuvV+ko1BC1T9tUxBVdrhHRCdn9ubxdevdLSAa49XRJRJiZnSuzl3Ys/yvs1vg==}
+  '@trpc/react-query@11.28.0':
+    resolution: {integrity: sha512-j+wMshdCMYKBCvn7QvdpiQgDRszQYN/f+CCYC/8fobyp+AIpRf3p9sG5ujp5vMUVdjYbrlGp1IvoCFzCjBaacQ==}
     peerDependencies:
       '@tanstack/react-query': ^5.80.3
-      '@trpc/client': 11.18.0
-      '@trpc/server': 11.18.0
+      '@trpc/client': 11.28.0
+      '@trpc/server': 11.28.0
       react: 19.2.3
       typescript: '>=5.7.2'
 
-  '@trpc/server@11.18.0':
-    resolution: {integrity: sha512-JAvXOuNTxgXjIDfQaOvDq1j66LMNfDJUH1IU7Slfn8EvRv2EkH6ehu3A7zpYhjO0syHHiYg77v2lG2JFJgvw7Q==}
-    hasBin: true
+  '@trpc/server@11.28.0':
+    resolution: {integrity: sha512-jj/JplNMKCyNZChmOxYRVnN4vNsS1zvLEnFfPkuvoYmrouKMuFNi4zaIMn1lDx6yyuuru/e5+rjcrBrIGc3p4g==}
     peerDependencies:
+      '@types/aws-lambda': '*'
+      '@types/express': '*'
+      '@types/ws': '*'
+      fastify: '*'
+      next: '*'
       typescript: '>=5.7.2'
+    peerDependenciesMeta:
+      '@types/aws-lambda':
+        optional: true
+      '@types/express':
+        optional: true
+      '@types/ws':
+        optional: true
+      fastify:
+        optional: true
+      next:
+        optional: true
 
   '@tybys/wasm-util@0.9.0':
     resolution: {integrity: sha512-6+7nlbMVX/PVDCwaIQ8nTOPveOcFLSt8GcXdx8hD0bt39uWxYT88uXzqTd4fTvqta7oeUJqudepapKNt2DYJFw==}
@@ -9692,22 +9706,25 @@ snapshots:
     dependencies:
       '@testing-library/dom': 10.4.2
 
-  '@trpc/client@11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3)':
+  '@trpc/client@11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3)':
     dependencies:
-      '@trpc/server': 11.18.0(typescript@6.0.3)
+      '@trpc/server': 11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3)
       typescript: 6.0.3
 
-  '@trpc/react-query@11.18.0(@tanstack/react-query@5.104.4(@types/react@19.2.15)(react@19.2.3))(@trpc/client@11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.18.0(typescript@6.0.3))(react@19.2.3)(typescript@6.0.3)':
+  '@trpc/react-query@11.28.0(@tanstack/react-query@5.104.4(@types/react@19.2.15)(react@19.2.3))(@trpc/client@11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3))(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(react@19.2.3)(typescript@6.0.3)':
     dependencies:
       '@tanstack/react-query': 5.104.4(@types/react@19.2.15)(react@19.2.3)
-      '@trpc/client': 11.19.0(@trpc/server@11.18.0(typescript@6.0.3))(typescript@6.0.3)
-      '@trpc/server': 11.18.0(typescript@6.0.3)
+      '@trpc/client': 11.28.0(@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3))(typescript@6.0.3)
+      '@trpc/server': 11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3)
       react: 19.2.3
       typescript: 6.0.3
 
-  '@trpc/server@11.18.0(typescript@6.0.3)':
+  '@trpc/server@11.28.0(@types/ws@8.18.2)(next@16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@6.0.3)':
     dependencies:
       typescript: 6.0.3
+    optionalDependencies:
+      '@types/ws': 8.18.2
+      next: 16.3.0(@babel/core@7.29.7)(@playwright/test@1.64.1)(@types/node@26.6.6)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
 
   '@tybys/wasm-util@0.9.0':
     dependencies:
