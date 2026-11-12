@@ -33,7 +33,7 @@
     "@react-native-masked-view/masked-view": "0.3.2",
     "@showbook/shared": "workspace:*",
     "@tanstack/react-query": "^5.104.4",
-    "@trpc/client": "^11.19.0",
+    "@trpc/client": "^11.25.2",
     "@trpc/react-query": "^11.18.0",
     "expo": "~57.0.31",
     "expo-audio": "~57.0.5",
