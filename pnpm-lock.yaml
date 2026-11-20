@@ -418,8 +418,8 @@ importers:
         specifier: ^0.45.3
         version: 0.45.3(expo-sqlite@57.0.5(expo@57.0.33)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       groq-sdk:
-        specifier: ^1.5.0
-        version: 1.5.0
+        specifier: ^1.6.0
+        version: 1.6.0
       mcp-budget-governor:
         specifier: ^0.1.0
         version: 0.1.0
@@ -579,8 +579,8 @@ importers:
         specifier: ^0.45.3
         version: 0.45.3(expo-sqlite@57.0.5(expo@57.0.33)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(pg@8.23.0)(postgres@3.4.9)
       groq-sdk:
-        specifier: ^1.5.0
-        version: 1.5.0
+        specifier: ^1.6.0
+        version: 1.6.0
       playwright:
         specifier: ^1.64.1
         version: 1.64.1
@@ -4618,8 +4618,8 @@ packages:
   graceful-fs@4.2.12:
     resolution: {integrity: sha512-iuyGF2E4oafQfPsRrG2wtY2ILupMhvtdrhzrxB+0VcjsPpSPttpfYdjnGFGsTi5MaJFjI1jOKHPQ6UTbTj9TAw==}
 
-  groq-sdk@1.5.0:
-    resolution: {integrity: sha512-aa5yaMVd8kehBacU3Pp7roObOuPksZNau+nPW+GDDB7OV/8jybVzeeOv54lZj8owNNIc3a7Tu2eYI7/kIwtMNw==}
+  groq-sdk@1.6.0:
+    resolution: {integrity: sha512-ggMgo6n84aZdNObgkSbSxWrdAq4wABsViIRb5e4N15bMUtDLZVhqlgZOI7X4TeqdBMdaVUOuUdZxAZIp06u0vw==}
     hasBin: true
 
   has-bigints@1.1.0:
@@ -11688,7 +11688,7 @@ snapshots:
 
   graceful-fs@4.2.12: {}
 
-  groq-sdk@1.5.0: {}
+  groq-sdk@1.6.0: {}
 
   has-bigints@1.1.0: {}
 
